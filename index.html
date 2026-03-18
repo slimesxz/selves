@@ -502,6 +502,20 @@
                     timestamp: serverTimestamp(),
                     status: "waitlist",
                 });
+        // closes addDoc (line 504)
+
+                fetch("https://waitlistemail-szlgjkfwxq-uc.a.run.app", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: email.toLowerCase() }),
+                });
+
+        btn.style.display = "none";
+        msg.style.display = "block";
+        msg.style.color = "#fff";
+        msg.textContent = "You're on the list. We'll reach out when we're ready.";
+    } catch (err) {
+        
                 btn.style.display = "none";
                 msg.style.display = "block";
                 msg.style.color = "#fff";
