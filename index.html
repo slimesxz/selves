@@ -412,7 +412,6 @@
     </footer>
 
     <script>
-        // Scroll progress bar
         const progressBar = document.getElementById('scroll-progress');
         function updateProgress() {
             const scrollTop = window.scrollY;
@@ -421,7 +420,6 @@
         }
         window.addEventListener('scroll', updateProgress, { passive: true });
 
-        // Section dots
         const sections = Array.from(document.querySelectorAll('[data-section]'));
         const dotsNav = document.getElementById('section-dots');
 
@@ -447,7 +445,6 @@
         window.addEventListener('scroll', updateDots, { passive: true });
         updateDots();
 
-        // Scroll reveal
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -458,47 +455,21 @@
         }, { threshold: 0.12 });
 
         document.querySelectorAll('.reveal, .reveal-group').forEach(el => observer.observe(el));
-
-        // Hero visible on load
         document.querySelectorAll('.hero .reveal').forEach(el => el.classList.add('visible'));
     </script>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp }
-            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyCLqyvlivYsY4VSREEvIIlBYphHc23fqxc",
-            authDomain: "selves-99.firebaseapp.com",
-            projectId: "selves-99",
-            storageBucket: "selves-99.firebasestorage.app",
-            messagingSenderId: "697466783905",
-            appId: "1:697466783905:web:7f491e3068811ddfa4c8e0"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
         document.getElementById("waitlist-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const btn = document.getElementById("waitlist-btn");
             const msg = document.getElementById("waitlist-msg");
             const email = document.getElementById("waitlist-email").value.trim();
-            const reason = document.getElementById("waitlist-reason").value.trim();
 
             btn.textContent = "Submitting...";
             btn.disabled = true;
 
             try {
-                await addDoc(collection(db, "waitlist"), {
-                    email: email.toLowerCase(),
-                    reason,
-                    timestamp: serverTimestamp(),
-                    status: "waitlist",
-                });
-
-                fetch("https://waitlistemail-szlgjkfwxq-uc.a.run.app", {
+                await fetch("https://waitlistemail-szlgjkfwxq-uc.a.run.app", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email: email.toLowerCase() }),
