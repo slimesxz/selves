@@ -459,6 +459,9 @@
     </script>
 
     <script type="module">
+        const params = new URLSearchParams(window.location.search);
+        const ref = params.get("ref") || null;
+
         document.getElementById("waitlist-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const btn = document.getElementById("waitlist-btn");
@@ -469,16 +472,24 @@
             btn.disabled = true;
 
             try {
-                await fetch("https://waitlistemail-szlgjkfwxq-uc.a.run.app", {
+                const res = await fetch("https://waitlistemail-szlgjkfwxq-uc.a.run.app", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email: email.toLowerCase() }),
+                    body: JSON.stringify({ email: email.toLowerCase(), ref }),
                 });
+
+                const text = await res.text();
 
                 btn.style.display = "none";
                 msg.style.display = "block";
-                msg.style.color = "#fff";
-                msg.textContent = "You're on the list. We'll reach out when we're ready.";
+
+                if (text === "duplicate") {
+                    msg.style.color = "#888";
+                    msg.textContent = "You're already on the list.";
+                } else {
+                    msg.style.color = "#fff";
+                    msg.textContent = "You're on the list. We'll reach out when we're ready.";
+                }
             } catch (err) {
                 btn.textContent = "Request Invite";
                 btn.disabled = false;
