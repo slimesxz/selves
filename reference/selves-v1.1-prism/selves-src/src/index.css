@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html, body, #root { height: 100%; }
+body { background: #000; color: #fff; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1c1c1f; border-radius: 9px; }
+::-webkit-scrollbar-thumb:hover { background: #2b2b30; }
+
+/* Reactive motion only. Every animation answers an action — none idles. */
+
+/* A recipient chip settling into place. The one micro-interaction with budget. */
+@keyframes chipSettle {
+  0%   { opacity: 0; transform: translateY(-3px) scale(0.94); }
+  60%  { opacity: 1; transform: translateY(0)     scale(1.015); }
+  100% { opacity: 1; transform: translateY(0)     scale(1); }
+}
+.chip-settle { animation: chipSettle 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Chips acknowledging a Send. */
+@keyframes chipAck {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+.chip-ack { animation: chipAck 0.32s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* An artifact arriving in the stream after Send. */
+@keyframes artifactArrive {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.artifact-arrive { animation: artifactArrive 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* A Self's palette taking the stage. Posture shift, not theatre. */
+.accent-transition { transition: color .22s ease, background-color .22s ease, border-color .22s ease, box-shadow .22s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-settle, .chip-ack, .artifact-arrive { animation: none; }
+  .accent-transition { transition: none; }
+}
