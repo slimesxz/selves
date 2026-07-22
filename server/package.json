@@ -9,6 +9,7 @@
   },
   "scripts": {
     "bootstrap": "bash ./bootstrap/bootstrap.sh",
+    "start": "node --env-file=.env src/server.ts",
     "migrate": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -d MIGRATE_DATABASE_URL",
     "migrate:down": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down -d MIGRATE_DATABASE_URL",
     "migrate:test": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -d TEST_MIGRATE_DATABASE_URL",
@@ -20,6 +21,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/cors": "11.3.0",
+    "fastify": "5.10.0",
     "node-pg-migrate": "^7.9.1",
     "pg": "^8.13.1"
   },
