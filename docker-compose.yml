@@ -1,0 +1,33 @@
+# Local development PostgreSQL for Selves.
+# Reproducible, isolated, local-only. No production credentials.
+# One-command start (from repo root):  docker compose up -d
+#
+# Phase 2 scope: substrate only. No schema, no tables. The init script below
+# provisions an empty test database alongside dev; migrations create tables.
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: selves-postgres
+    # Local-only credentials. Never used in production. See server/.env.example.
+    environment:
+      POSTGRES_USER: selves
+      POSTGRES_PASSWORD: selves_local_dev
+      POSTGRES_DB: selves_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - selves_pgdata:/var/lib/postgresql/data
+      # Runs once, only when the data volume is first created. Provisions the
+      # isolated test database. Database creation only — no tables, no schema.
+      - ./server/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selves -d selves_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  selves_pgdata:
+    name: selves_pgdata
