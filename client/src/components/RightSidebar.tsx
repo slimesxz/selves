@@ -17,7 +17,7 @@ interface RightSidebarProps {
   setInspectedSelfId: (id: string | null) => void;
   connections: Connection[];
   keyGrants: KeyGrant[];
-  requestKey: (toSelfId: string, type: 'timed' | 'permanent') => { success: boolean; error?: string };
+  requestKey: (toSelfId: string) => { success: boolean; error?: string };
   initiateConnection: (toSelfId: string) => { success: boolean; error?: string };
   deriveRing: (fromId: string, toId: string) => string | null;
   hasKey: (holderId: string, granterId: string) => boolean;
@@ -74,9 +74,9 @@ export function RightSidebar({
     ? keyGrants.some(g => g.requesterSelfId === currentSelf.id && g.granterSelfId === inspected.id && g.status === 'pending')
     : false;
 
-  const handleRequestKey = (type: 'timed' | 'permanent') => {
+  const handleRequestKey = () => {
     if (!inspected) return;
-    const res = requestKey(inspected.id, type);
+    const res = requestKey(inspected.id);
     flash(res.success ? `Key requested from ${inspected.name}.` : res.error || 'Request failed.');
   };
 
@@ -202,20 +202,12 @@ export function RightSidebar({
                         {pendingKeyReq ? (
                           <span className="text-[9px] text-amber-500 uppercase">Request pending…</span>
                         ) : (
-                          <>
-                            <button
-                              onClick={() => handleRequestKey('permanent')}
-                              className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-[9px] rounded uppercase"
-                            >
-                              Request permanent
-                            </button>
-                            <button
-                              onClick={() => handleRequestKey('timed')}
-                              className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-[9px] rounded uppercase"
-                            >
-                              Request timed
-                            </button>
-                          </>
+                          <button
+                            onClick={() => handleRequestKey()}
+                            className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-[9px] rounded uppercase"
+                          >
+                            Request key
+                          </button>
                         )}
                       </div>
                     )}

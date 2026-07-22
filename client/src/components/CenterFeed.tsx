@@ -74,7 +74,6 @@ export function CenterFeed({
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [giftIdx, setGiftIdx] = useState(0);
-  const [keyGrantType, setKeyGrantType] = useState<'timed' | 'permanent'>('permanent');
 
   const [errorBanner, setErrorBanner] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
@@ -154,7 +153,7 @@ export function CenterFeed({
     }
 
     if (payloadType === 'key') {
-      createPlacement(content.trim(), recipientIds, 'key', { keyGrantType });
+      createPlacement(content.trim(), recipientIds, 'key');
       flashSuccess(`Key sent. To: ${recipientNames}`);
       clearComposer();
       return;
@@ -313,17 +312,7 @@ export function CenterFeed({
           {payloadType === 'key' && (
             <div className="flex items-center gap-2 text-[10px] font-mono">
               <KeyRound size={12} className="text-red-400" />
-              <span className="text-neutral-500 uppercase">Grants access to your private correspondence:</span>
-              {(['permanent', 'timed'] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setKeyGrantType(t)}
-                  className={`px-2 py-0.5 rounded border uppercase ${keyGrantType === t ? 'bg-red-950/40 border-red-800 text-red-400 font-bold' : 'bg-black border-neutral-900 text-neutral-500'}`}
-                >
-                  {t}
-                </button>
-              ))}
+              <span className="text-neutral-500 uppercase">Grants access to your private correspondence.</span>
             </div>
           )}
 
@@ -451,7 +440,7 @@ export function CenterFeed({
                 {placement.payloadType === 'key' && (
                   <div className="flex items-center gap-2 p-2.5 bg-black border border-red-900/40 rounded text-[10px] font-mono text-red-400/90 uppercase">
                     <KeyRound size={12} />
-                    {placement.payloadData?.keyGrantType || 'permanent'} key — access to {author.name}'s private correspondence
+                    Key — access to {author.name}'s private correspondence
                   </div>
                 )}
 
@@ -459,8 +448,6 @@ export function CenterFeed({
                   <div className="space-y-1.5 p-2.5 bg-black border border-neutral-900 rounded">
                     <div className="text-[10px] font-mono text-neutral-400 uppercase font-bold">{poll.question}</div>
                     {poll.options.map(opt => {
-                      const total = poll.options.reduce((sum, o) => sum + o.votes, 0) || 1;
-                      const pct = Math.round((opt.votes / total) * 100);
                       const voted = poll.voterSelfIds[currentSelf.id] === opt.id;
                       const hasVoted = !!poll.voterSelfIds[currentSelf.id];
                       return (
@@ -468,15 +455,9 @@ export function CenterFeed({
                           key={opt.id}
                           disabled={hasVoted}
                           onClick={() => voteInPoll(poll.id, opt.id)}
-                          className={`w-full relative overflow-hidden text-left px-2 py-1.5 rounded border text-[10px] transition-colors ${voted ? 'border-white text-white font-bold' : 'border-neutral-800 text-neutral-400 hover:border-neutral-600'} ${hasVoted ? 'cursor-default' : 'cursor-pointer'}`}
+                          className={`w-full text-left px-2 py-1.5 rounded border text-[10px] transition-colors ${voted ? 'border-white text-white font-bold' : 'border-neutral-800 text-neutral-400 hover:border-neutral-600'} ${hasVoted ? 'cursor-default' : 'cursor-pointer'}`}
                         >
-                          {hasVoted && (
-                            <span className="absolute inset-y-0 left-0 bg-neutral-800/50" style={{ width: `${pct}%` }}></span>
-                          )}
-                          <span className="relative flex items-center justify-between">
-                            <span>{opt.text}</span>
-                            {hasVoted && <span className="font-mono text-neutral-500">{pct}%</span>}
-                          </span>
+                          <span>{opt.text}</span>
                         </button>
                       );
                     })}

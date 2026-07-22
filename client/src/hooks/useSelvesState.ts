@@ -146,12 +146,10 @@ export function useSelvesState() {
 
     // A key payload IS a grant: sending a key grants access to each recipient.
     if (payloadType === 'key') {
-      const grantType = payloadData?.keyGrantType || 'permanent';
       const newGrants: KeyGrant[] = recipientSelfIds.map(rid => ({
         id: `grant_${Date.now()}_${rid}`,
         requesterSelfId: rid,
         granterSelfId: currentSelfId,
-        type: grantType,
         status: 'granted',
         createdAt: new Date().toISOString()
       }));
@@ -166,7 +164,7 @@ export function useSelvesState() {
     const newPoll: Poll = {
       id: pollId,
       question,
-      options: optionsTexts.map((text, i) => ({ id: `opt_${Date.now()}_${i}`, text, votes: 0 })),
+      options: optionsTexts.map((text, i) => ({ id: `opt_${Date.now()}_${i}`, text })),
       voterSelfIds: {},
       createdAt: new Date().toISOString()
     };
@@ -175,7 +173,7 @@ export function useSelvesState() {
   };
 
   // KEY REQUEST — asks another Self for access; they resolve it.
-  const requestKey = (toSelfId: string, type: 'timed' | 'permanent') => {
+  const requestKey = (toSelfId: string) => {
     if (toSelfId === currentSelfId) return { success: false, error: 'Cannot request a key from yourself.' };
     const existing = keyGrants.find(
       g => g.requesterSelfId === currentSelfId && g.granterSelfId === toSelfId && g.status === 'pending'
@@ -186,7 +184,6 @@ export function useSelvesState() {
       id: `grant_${Date.now()}`,
       requesterSelfId: currentSelfId,
       granterSelfId: toSelfId,
-      type,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
@@ -214,7 +211,6 @@ export function useSelvesState() {
         if (p.voterSelfIds[currentSelfId]) return p;
         return {
           ...p,
-          options: p.options.map(opt => (opt.id === optionId ? { ...opt, votes: opt.votes + 1 } : opt)),
           voterSelfIds: { ...p.voterSelfIds, [currentSelfId]: optionId }
         };
       })

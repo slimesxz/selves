@@ -127,9 +127,9 @@ export const SEED_POLLS: Poll[] = [
     id: 'poll_1',
     question: 'Should a connection imply that the identity behind it is traceable?',
     options: [
-      { id: 'opt_1', text: 'No, absolute decoupling of connection & ID', votes: 2 },
-      { id: 'opt_2', text: 'Yes, but only between close correspondents', votes: 0 },
-      { id: 'opt_3', text: 'Traceability should be entirely context-specific', votes: 1 }
+      { id: 'opt_1', text: 'No, absolute decoupling of connection & ID' },
+      { id: 'opt_2', text: 'Yes, but only between close correspondents' },
+      { id: 'opt_3', text: 'Traceability should be entirely context-specific' }
     ],
     voterSelfIds: {
       'self_c_zerosum': 'opt_1',

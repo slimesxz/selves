@@ -35,7 +35,6 @@ export interface Placement {
     pollId?: string;
     giftName?: string;
     giftSymbol?: string;
-    keyGrantType?: 'timed' | 'permanent';
   };
   createdAt: string;
 }
@@ -53,8 +52,6 @@ export interface KeyGrant {
   id: string;
   requesterSelfId: string;
   granterSelfId: string;
-  type: 'timed' | 'permanent';
-  expiresAt?: string;
   status: 'pending' | 'granted' | 'declined';
   createdAt: string;
 }
@@ -62,7 +59,7 @@ export interface KeyGrant {
 export interface Poll {
   id: string;
   question: string;
-  options: { id: string; text: string; votes: number }[];
+  options: { id: string; text: string }[];
   voterSelfIds: { [selfId: string]: string };
   createdAt: string;
 }
