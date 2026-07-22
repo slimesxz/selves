@@ -46,7 +46,7 @@ const load = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(saved) as T; } catch { return fallback; }
 };
 
-export type FeedFilter = 'All' | 'Sent' | 'Received' | 'Vault';
+export type FeedFilter = 'Sent' | 'Vault';
 
 export function useSelvesState() {
   const [selves, setSelves] = useState<Self[]>(() => load('selves_v2_selves', SEED_SELVES));
@@ -59,7 +59,7 @@ export function useSelvesState() {
   const [notifications, setNotifications] = useState<Notification[]>(() => load('selves_v2_notifs', SEED_NOTIFICATIONS));
   const [bookmarks, setBookmarks] = useState<{ [selfId: string]: string[] }>(() => load('selves_v2_bookmarks', {}));
 
-  const [feedFilter, setFeedFilter] = useState<FeedFilter>('All');
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('Sent');
   const [inspectedSelfId, setInspectedSelfId] = useState<string | null>(null);
   const [activeVisualSignals, setActiveVisualSignals] = useState<
     { id: string; fromX: number; fromY: number; toX: number; toY: number }[]
@@ -492,7 +492,7 @@ export function useSelvesState() {
     setIntroductions([]);
     setNotifications(SEED_NOTIFICATIONS);
     setBookmarks({});
-    setFeedFilter('All');
+    setFeedFilter('Sent');
     setInspectedSelfId(null);
   };
 

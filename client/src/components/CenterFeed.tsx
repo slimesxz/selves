@@ -88,10 +88,9 @@ export function CenterFeed({
   const addressableSelves = selves.filter(s => s.id !== currentSelf.id && connectedIds.includes(s.id));
 
   const filteredPlacements = visiblePlacements.filter(p => {
-    if (feedFilter === 'Sent') return p.selfId === currentSelf.id && p.recipientSelfIds.length > 0;
-    if (feedFilter === 'Received') return p.selfId !== currentSelf.id;
     if (feedFilter === 'Vault') return p.selfId === currentSelf.id && p.recipientSelfIds.length === 0;
-    return true;
+    // 'Sent' — the letter register shows only what this Self has written.
+    return p.selfId === currentSelf.id && p.recipientSelfIds.length > 0;
   });
 
   const toggleRecipient = (id: string) => {
@@ -201,7 +200,7 @@ export function CenterFeed({
 
         <div className="flex items-center gap-2 p-2 bg-neutral-950 text-[9px] font-mono border-b border-neutral-900 overflow-x-auto">
           <span className="text-neutral-500 font-bold uppercase shrink-0">Register:</span>
-          {(['All', 'Sent', 'Received', 'Vault'] as const).map(f => (
+          {(['Sent', 'Vault'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFeedFilter(f)}
