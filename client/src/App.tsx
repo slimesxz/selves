@@ -56,7 +56,6 @@ export default function App() {
             notifications={state.notifications}
             markNotificationAsRead={state.markNotificationAsRead}
             resolveKeyGrant={state.resolveKeyGrant}
-            resolveIntroduction={state.resolveIntroduction}
             acceptConnection={state.acceptConnection}
             declineConnection={state.declineConnection}
             factoryReset={state.factoryReset}
@@ -112,7 +111,6 @@ export default function App() {
             keyGrants={state.keyGrants}
             setBoundedDisclosure={state.setBoundedDisclosure}
             requestKey={state.requestKey}
-            proposeIntroduction={state.proposeIntroduction}
             initiateConnection={state.initiateConnection}
             deriveRing={state.deriveRing}
             hasKey={state.hasKey}

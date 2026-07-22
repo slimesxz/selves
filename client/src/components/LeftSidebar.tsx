@@ -15,7 +15,6 @@ interface LeftSidebarProps {
   notifications: Notification[];
   markNotificationAsRead: (id: string) => void;
   resolveKeyGrant: (grantId: string, status: 'granted' | 'declined') => void;
-  resolveIntroduction: (introId: string, targetSelfId: string, accept: boolean) => void;
   acceptConnection: (connectionId: string, targetSelfId: string) => void;
   declineConnection: (connectionId: string) => void;
   factoryReset: () => void;
@@ -29,7 +28,6 @@ export function LeftSidebar({
   notifications,
   markNotificationAsRead,
   resolveKeyGrant,
-  resolveIntroduction,
   acceptConnection,
   declineConnection,
   factoryReset
@@ -341,31 +339,6 @@ export function LeftSidebar({
                             onClick={(e) => {
                               e.stopPropagation();
                               resolveKeyGrant(notif.data.grantId, 'declined');
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] font-bold rounded font-mono"
-                          >
-                            <X size={8} /> DECLINE
-                          </button>
-                        </div>
-                      )}
-
-                      {!notif.read && notif.type === 'introduction' && notif.data?.introId && (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-neutral-800">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resolveIntroduction(notif.data.introId, currentSelfId, true);
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-100 hover:bg-neutral-200 text-black text-[9px] font-bold rounded font-mono"
-                          >
-                            <Check size={8} /> ACCEPT
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resolveIntroduction(notif.data.introId, currentSelfId, false);
                               markNotificationAsRead(notif.id);
                             }}
                             className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] font-bold rounded font-mono"

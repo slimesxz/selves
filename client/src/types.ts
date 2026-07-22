@@ -85,21 +85,12 @@ export interface Poll {
   createdAt: string;
 }
 
-export interface Introduction {
-  id: string;
-  introducerSelfId: string;
-  selfAId: string;
-  selfBId: string;
-  status: 'pending' | 'accepted' | 'declined';
-  createdAt: string;
-}
-
 export interface Notification {
   id: string;
   selfId: string;
   title: string;
   message: string;
-  type: 'connection' | 'key_request' | 'introduction' | 'system';
+  type: 'connection' | 'key_request' | 'system';
   data?: any;
   read: boolean;
   createdAt: string;

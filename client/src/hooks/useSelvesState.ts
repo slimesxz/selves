@@ -15,8 +15,7 @@ import {
   Reply,
   DerivedRing,
   PayloadType,
-  KeyGrant,
-  Introduction
+  KeyGrant
 } from '../types';
 import {
   SEED_SELVES,
@@ -55,7 +54,6 @@ export function useSelvesState() {
   const [connections, setConnections] = useState<Connection[]>(() => load('selves_v2_connections', SEED_CONNECTIONS));
   const [keyGrants, setKeyGrants] = useState<KeyGrant[]>(() => load('selves_v2_keygrants', []));
   const [polls, setPolls] = useState<Poll[]>(() => load('selves_v2_polls', SEED_POLLS));
-  const [introductions, setIntroductions] = useState<Introduction[]>(() => load('selves_v2_intros', []));
   const [notifications, setNotifications] = useState<Notification[]>(() => load('selves_v2_notifs', SEED_NOTIFICATIONS));
   const [bookmarks, setBookmarks] = useState<{ [selfId: string]: string[] }>(() => load('selves_v2_bookmarks', {}));
 
@@ -72,10 +70,9 @@ export function useSelvesState() {
     store.set('selves_v2_connections', JSON.stringify(connections));
     store.set('selves_v2_keygrants', JSON.stringify(keyGrants));
     store.set('selves_v2_polls', JSON.stringify(polls));
-    store.set('selves_v2_intros', JSON.stringify(introductions));
     store.set('selves_v2_notifs', JSON.stringify(notifications));
     store.set('selves_v2_bookmarks', JSON.stringify(bookmarks));
-  }, [selves, currentSelfId, placements, connections, keyGrants, polls, introductions, notifications, bookmarks]);
+  }, [selves, currentSelfId, placements, connections, keyGrants, polls, notifications, bookmarks]);
 
   const currentSelf = selves.find(s => s.id === currentSelfId) || selves[0];
   const isOwn = (s: Self) => s.userId === 'user_1';
@@ -245,59 +242,6 @@ export function useSelvesState() {
         : `${currentSelf.name} declined your key request.`,
       'system'
     );
-  };
-
-  // INTRODUCTIONS
-  const proposeIntroduction = (selfAId: string, selfBId: string) => {
-    if (selfAId === selfBId) return { success: false, error: 'Cannot introduce a Self to itself.' };
-    const newIntro: Introduction = {
-      id: `intro_${Date.now()}`,
-      introducerSelfId: currentSelfId,
-      selfAId,
-      selfBId,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
-    setIntroductions(prev => [newIntro, ...prev]);
-    sendNotification(selfAId, 'Introduction Proposed', `${currentSelf.name} proposed an introduction with another Self.`, 'introduction', { introId: newIntro.id, otherSelfId: selfBId });
-    sendNotification(selfBId, 'Introduction Proposed', `${currentSelf.name} proposed an introduction with another Self.`, 'introduction', { introId: newIntro.id, otherSelfId: selfAId });
-    return { success: true };
-  };
-
-  const resolveIntroduction = (introId: string, _targetSelfId: string, accept: boolean) => {
-    const intro = introductions.find(i => i.id === introId);
-    if (!intro) return;
-    if (!accept) {
-      setIntroductions(prev => prev.map(i => (i.id === introId ? { ...i, status: 'declined' } : i)));
-      sendNotification(intro.introducerSelfId, 'Introduction Declined', 'The introduction between the Selves was declined.', 'system');
-      return;
-    }
-    setIntroductions(prev => prev.map(i => (i.id === introId ? { ...i, status: 'accepted' } : i)));
-    setConnections(prev => [
-      ...prev,
-      {
-        id: `conn_intro_${Date.now()}_1`,
-        fromSelfId: intro.selfAId,
-        toSelfId: intro.selfBId,
-        status: 'connected',
-        revealedDecision: { connectionExists: true, context: false, identity: false },
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: `conn_intro_${Date.now()}_2`,
-        fromSelfId: intro.selfBId,
-        toSelfId: intro.selfAId,
-        status: 'connected',
-        revealedDecision: { connectionExists: true, context: false, identity: false },
-        createdAt: new Date().toISOString()
-      }
-    ]);
-    triggerVisualSignal(intro.selfAId, intro.selfBId);
-    sendNotification(intro.introducerSelfId, 'Introduction Completed', 'The introduction you proposed was completed. The Selves are now connected.', 'system');
-    const selfAName = selves.find(s => s.id === intro.selfAId)?.name || 'a Self';
-    const selfBName = selves.find(s => s.id === intro.selfBId)?.name || 'a Self';
-    sendNotification(intro.selfAId, 'New Connection', `You are now connected to ${selfBName} via introduction.`, 'system');
-    sendNotification(intro.selfBId, 'New Connection', `You are now connected to ${selfAName} via introduction.`, 'system');
   };
 
   // BOUNDED DISCLOSURE — reveal controls per connection.
@@ -489,7 +433,6 @@ export function useSelvesState() {
     setConnections(SEED_CONNECTIONS);
     setKeyGrants([]);
     setPolls(SEED_POLLS);
-    setIntroductions([]);
     setNotifications(SEED_NOTIFICATIONS);
     setBookmarks({});
     setFeedFilter('Sent');
@@ -504,7 +447,6 @@ export function useSelvesState() {
     connections,
     keyGrants,
     polls,
-    introductions,
     notifications,
     bookmarks,
     feedFilter,
@@ -519,8 +461,6 @@ export function useSelvesState() {
     addReply,
     requestKey,
     resolveKeyGrant,
-    proposeIntroduction,
-    resolveIntroduction,
     setBoundedDisclosure,
     updateGraphPosition,
     toggleBookmark,

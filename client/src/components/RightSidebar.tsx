@@ -1,13 +1,13 @@
 /**
  * Right panel — inspector.
  * Shows a Self's record as it stands: correspondence history, derived annotation,
- * key access, bounded disclosure, introductions. Nothing here is a metric.
+ * key access, bounded disclosure. Nothing here is a metric.
  */
 
 import React, { useState } from 'react';
 import { Self, Connection, KeyGrant, Placement } from '../types';
 import { IconRenderer } from './IconRenderer';
-import { KeyRound, Link2, GitMerge, Eye, EyeOff, X, ArrowRight } from 'lucide-react';
+import { KeyRound, Link2, Eye, EyeOff, X } from 'lucide-react';
 
 interface RightSidebarProps {
   currentSelf: Self;
@@ -19,7 +19,6 @@ interface RightSidebarProps {
   keyGrants: KeyGrant[];
   setBoundedDisclosure: (connectionId: string, field: 'connectionExists' | 'context' | 'identity', value: boolean) => void;
   requestKey: (toSelfId: string, type: 'timed' | 'permanent') => { success: boolean; error?: string };
-  proposeIntroduction: (selfAId: string, selfBId: string) => { success: boolean; error?: string };
   initiateConnection: (toSelfId: string) => { success: boolean; error?: string };
   deriveRing: (fromId: string, toId: string) => string | null;
   hasKey: (holderId: string, granterId: string) => boolean;
@@ -35,13 +34,10 @@ export function RightSidebar({
   keyGrants,
   setBoundedDisclosure,
   requestKey,
-  proposeIntroduction,
   initiateConnection,
   deriveRing,
   hasKey
 }: RightSidebarProps) {
-  const [introA, setIntroA] = useState('');
-  const [introB, setIntroB] = useState('');
   const [banner, setBanner] = useState('');
 
   const inspected = inspectedSelfId ? selves.find(s => s.id === inspectedSelfId) : null;
@@ -91,21 +87,6 @@ export function RightSidebar({
     const res = initiateConnection(inspected.id);
     flash(res.success ? `Invitation sent to ${inspected.name}.` : res.error || 'Failed.');
   };
-
-  const handleIntroduce = () => {
-    if (!introA || !introB) {
-      flash('Choose two Selves to introduce.');
-      return;
-    }
-    const res = proposeIntroduction(introA, introB);
-    flash(res.success ? 'Introduction proposed.' : res.error || 'Failed.');
-    if (res.success) {
-      setIntroA('');
-      setIntroB('');
-    }
-  };
-
-  const others = selves.filter(s => s.id !== currentSelf.id);
 
   return (
     <aside id="right-column" className="flex flex-col h-full bg-neutral-950 border-l border-neutral-900 overflow-y-auto text-neutral-300">
@@ -292,47 +273,6 @@ export function RightSidebar({
             )}
           </>
         )}
-
-        {/* INTRODUCTION — ceremonial, always available */}
-        <div className="space-y-1.5 pt-2 border-t border-neutral-900">
-          <div className="text-[9px] font-mono uppercase text-neutral-500 font-bold tracking-wider flex items-center gap-1">
-            <GitMerge size={10} className="text-amber-500" /> Introduction
-          </div>
-          <div className="p-3 bg-black/40 border border-amber-900/20 rounded-lg space-y-2.5">
-            <p className="text-[9px] font-mono text-neutral-500 uppercase leading-relaxed">
-              As {currentSelf.name}, introduce two Selves to each other. Both must accept.
-            </p>
-            <div className="flex items-center gap-1.5">
-              <select
-                value={introA}
-                onChange={(e) => setIntroA(e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded px-1.5 py-1 text-[10px] text-neutral-200 font-mono focus:outline-none"
-              >
-                <option value="">Self A…</option>
-                {others.filter(s => s.id !== introB).map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <ArrowRight size={11} className="text-neutral-600 shrink-0" />
-              <select
-                value={introB}
-                onChange={(e) => setIntroB(e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded px-1.5 py-1 text-[10px] text-neutral-200 font-mono focus:outline-none"
-              >
-                <option value="">Self B…</option>
-                {others.filter(s => s.id !== introA).map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={handleIntroduce}
-              className="w-full py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-800/50 text-amber-400 text-[10px] font-bold rounded font-mono uppercase transition-colors"
-            >
-              Propose Introduction
-            </button>
-          </div>
-        </div>
 
       </div>
     </aside>

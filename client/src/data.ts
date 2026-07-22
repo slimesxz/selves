@@ -234,19 +234,5 @@ export const SEED_NOTIFICATIONS: Notification[] = [
     data: { requesterSelfId: 'self_c_zerosum', grantType: 'permanent' },
     read: false,
     createdAt: '2026-07-07T10:45:00Z'
-  },
-  {
-    id: 'notif_2',
-    selfId: 'self_user_scribe',
-    title: 'Introduction Proposed',
-    message: 'The Curator wants to introduce Scribe to Hespera.',
-    type: 'introduction',
-    data: {
-      introducerSelfId: 'self_c_curator',
-      selfAId: 'self_user_scribe',
-      selfBId: 'self_c_hespera'
-    },
-    read: false,
-    createdAt: '2026-07-07T11:00:00Z'
   }
 ];
