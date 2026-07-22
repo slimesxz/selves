@@ -18,5 +18,5 @@ Ratified riders on the playbook:
 - legacy/ is quarantined and out of scope for all playbook phases.
 - firebase.json at root exists solely to keep legacy/ deployable.
 
-Currently authorized: Playbook Phase 0 only — read-only audit of the
-current tree. No file edits during P0.
+Playbook Phase 0 and Phase 0.5 (client compliance strip) are closed.
+Currently authorized: nothing. Await explicit P1 authorization.
