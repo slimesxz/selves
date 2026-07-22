@@ -1,13 +1,13 @@
 /**
  * Right panel — inspector.
  * Shows a Self's record as it stands: correspondence history, derived annotation,
- * key access, bounded disclosure. Nothing here is a metric.
+ * key access. Nothing here is a metric.
  */
 
 import React, { useState } from 'react';
 import { Self, Connection, KeyGrant, Placement } from '../types';
 import { IconRenderer } from './IconRenderer';
-import { KeyRound, Link2, Eye, EyeOff, X } from 'lucide-react';
+import { KeyRound, Link2, X } from 'lucide-react';
 
 interface RightSidebarProps {
   currentSelf: Self;
@@ -17,7 +17,6 @@ interface RightSidebarProps {
   setInspectedSelfId: (id: string | null) => void;
   connections: Connection[];
   keyGrants: KeyGrant[];
-  setBoundedDisclosure: (connectionId: string, field: 'connectionExists' | 'context' | 'identity', value: boolean) => void;
   requestKey: (toSelfId: string, type: 'timed' | 'permanent') => { success: boolean; error?: string };
   initiateConnection: (toSelfId: string) => { success: boolean; error?: string };
   deriveRing: (fromId: string, toId: string) => string | null;
@@ -32,7 +31,6 @@ export function RightSidebar({
   setInspectedSelfId,
   connections,
   keyGrants,
-  setBoundedDisclosure,
   requestKey,
   initiateConnection,
   deriveRing,
@@ -224,7 +222,7 @@ export function RightSidebar({
                   </div>
                 </div>
 
-                {/* Connection / bounded disclosure */}
+                {/* Connection */}
                 <div className="space-y-1.5">
                   <div className="text-[9px] font-mono uppercase text-neutral-500 font-bold tracking-wider flex items-center gap-1">
                     <Link2 size={10} /> Connection
@@ -236,32 +234,6 @@ export function RightSidebar({
                     >
                       Invite to connect
                     </button>
-                  )}
-                  {outboundConn && outboundConn.status === 'connected' && (
-                    <div className="p-2.5 bg-black/40 border border-neutral-900 rounded space-y-2 text-[10px] font-mono">
-                      <div className="text-[8px] text-neutral-600 uppercase leading-relaxed">
-                        Bounded disclosure — what this connection reveals about you:
-                      </div>
-                      {(
-                        [
-                          ['connectionExists', 'Connection exists'],
-                          ['context', 'Context'],
-                          ['identity', 'Identity']
-                        ] as const
-                      ).map(([field, label]) => {
-                        const on = outboundConn.revealedDecision[field];
-                        return (
-                          <button
-                            key={field}
-                            onClick={() => setBoundedDisclosure(outboundConn.id, field, !on)}
-                            className={`w-full flex items-center justify-between px-2 py-1 rounded border transition-colors ${on ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-900 bg-black text-neutral-600'}`}
-                          >
-                            <span className="uppercase">{label}</span>
-                            {on ? <Eye size={11} /> : <EyeOff size={11} />}
-                          </button>
-                        );
-                      })}
-                    </div>
                   )}
                   {outboundConn && outboundConn.status === 'pending' && (
                     <div className="p-2 bg-black/40 border border-neutral-900 rounded text-[9px] font-mono text-amber-500 uppercase text-center">

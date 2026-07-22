@@ -57,12 +57,6 @@ export interface Connection {
   fromSelfId: string;
   toSelfId: string;
   status: 'pending' | 'connected' | 'declined';
-  // Bounded disclosure: what fromSelf reveals about this connection.
-  revealedDecision: {
-    connectionExists: boolean;
-    context: boolean;
-    identity: boolean;
-  };
   createdAt: string;
 }
 

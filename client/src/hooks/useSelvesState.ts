@@ -215,21 +215,6 @@ export function useSelvesState() {
     return { success: true };
   };
 
-  // BOUNDED DISCLOSURE — reveal controls per connection.
-  const setBoundedDisclosure = (
-    connectionId: string,
-    field: 'connectionExists' | 'context' | 'identity',
-    value: boolean
-  ) => {
-    setConnections(prev =>
-      prev.map(c =>
-        c.id === connectionId
-          ? { ...c, revealedDecision: { ...c.revealedDecision, [field]: value } }
-          : c
-      )
-    );
-  };
-
   const updateGraphPosition = (selfId: string, x: number, y: number) => {
     setSelves(prev => prev.map(s => (s.id === selfId ? { ...s, graphPosition: { x, y } } : s)));
   };
@@ -275,7 +260,6 @@ export function useSelvesState() {
       fromSelfId: currentSelfId,
       toSelfId,
       status: 'pending',
-      revealedDecision: { connectionExists: true, context: true, identity: false },
       createdAt: new Date().toISOString()
     };
     setConnections(prev => [...prev, newConn]);
@@ -364,7 +348,6 @@ export function useSelvesState() {
     createPollPlacement,
     addReply,
     requestKey,
-    setBoundedDisclosure,
     updateGraphPosition,
     toggleBookmark,
     voteInPoll,

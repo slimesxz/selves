@@ -104,7 +104,6 @@ export default function App() {
             setInspectedSelfId={state.setInspectedSelfId}
             connections={state.connections}
             keyGrants={state.keyGrants}
-            setBoundedDisclosure={state.setBoundedDisclosure}
             requestKey={state.requestKey}
             initiateConnection={state.initiateConnection}
             deriveRing={state.deriveRing}

@@ -76,7 +76,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_user_aether',
     toSelfId: 'self_c_curator',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: true, identity: true },
     createdAt: '2026-07-02T10:00:00Z'
   },
   {
@@ -84,7 +83,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_c_curator',
     toSelfId: 'self_user_aether',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: true, identity: true },
     createdAt: '2026-07-02T10:05:00Z'
   },
   {
@@ -92,7 +90,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_user_aether',
     toSelfId: 'self_c_zerosum',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: false, identity: false },
     createdAt: '2026-07-03T11:00:00Z'
   },
   {
@@ -100,7 +97,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_c_zerosum',
     toSelfId: 'self_user_aether',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: false, identity: false },
     createdAt: '2026-07-03T11:15:00Z'
   },
   {
@@ -108,7 +104,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_user_scribe',
     toSelfId: 'self_c_hespera',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: true, identity: true },
     createdAt: '2026-07-04T18:00:00Z'
   },
   {
@@ -116,7 +111,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_c_hespera',
     toSelfId: 'self_user_scribe',
     status: 'connected',
-    revealedDecision: { connectionExists: true, context: true, identity: true },
     createdAt: '2026-07-04T18:10:00Z'
   },
   {
@@ -124,7 +118,6 @@ export const SEED_CONNECTIONS: Connection[] = [
     fromSelfId: 'self_user_scribe',
     toSelfId: 'self_c_aletheia',
     status: 'pending',
-    revealedDecision: { connectionExists: true, context: false, identity: false },
     createdAt: '2026-07-06T09:00:00Z'
   }
 ];
