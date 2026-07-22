@@ -1,11 +1,15 @@
 const functions = require("firebase-functions");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const { Resend } = require("resend");
 const fs = require("fs");
 
 admin.initializeApp();
 const db = admin.firestore();
-const resend = new Resend("re_5iPnzUwA_HnS7tWyRr25jUMwtSygDpacP");
+
+// Read the Resend API key from Firebase Secret Manager at runtime.
+// Set with: firebase functions:secrets:set RESEND_API_KEY
+const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const REFERRAL_BOOST_MS = 5 * 60 * 60 * 1000; // 5 hours in ms
 
@@ -34,7 +38,10 @@ function computeQueueScore(createdAt, referralCount) {
   return base - (referralCount * REFERRAL_BOOST_MS);
 }
 
-exports.waitlistEmail = functions.https.onRequest(async (req, res) => {
+exports.waitlistEmail = functions
+  .runWith({ secrets: ["RESEND_API_KEY"] })
+  .https.onRequest(async (req, res) => {
+  const resend = new Resend(resendApiKey.value());
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
     res.set("Access-Control-Allow-Methods", "POST");
