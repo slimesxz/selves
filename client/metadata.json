@@ -1,0 +1,6 @@
+{
+  "name": "Selves",
+  "description": "Identity Operating System: a persistent identity container allowing users to maintain up to three distinct social identities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
