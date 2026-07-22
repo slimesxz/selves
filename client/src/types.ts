@@ -38,18 +38,6 @@ export interface Placement {
     keyGrantType?: 'timed' | 'permanent';
   };
   createdAt: string;
-  replies: Reply[];
-}
-
-export interface Reply {
-  id: string;
-  placementId: string;
-  selfId: string;
-  asSelfName: string;
-  asSelfColor: string;
-  asSelfIcon: string;
-  content: string;
-  createdAt: string;
 }
 
 export interface Connection {

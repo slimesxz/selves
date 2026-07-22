@@ -11,7 +11,6 @@ import {
   Placement,
   Connection,
   Poll,
-  Reply,
   DerivedRing,
   PayloadType,
   KeyGrant
@@ -140,8 +139,7 @@ export function useSelvesState() {
       content,
       payloadType,
       payloadData,
-      createdAt: new Date().toISOString(),
-      replies: []
+      createdAt: new Date().toISOString()
     };
     setPlacements(prev => [newPlacement, ...prev]);
     recipientSelfIds.forEach(rid => triggerVisualSignal(currentSelfId, rid));
@@ -174,24 +172,6 @@ export function useSelvesState() {
     };
     setPolls(prev => [...prev, newPoll]);
     createPlacement(question, recipientSelfIds, 'poll', { pollId });
-  };
-
-  const addReply = (placementId: string, content: string, asSelfId: string = currentSelfId) => {
-    const author = selves.find(s => s.id === asSelfId);
-    if (!author) return;
-    const newReply: Reply = {
-      id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      placementId,
-      selfId: asSelfId,
-      asSelfName: author.name,
-      asSelfColor: author.color,
-      asSelfIcon: author.icon,
-      content,
-      createdAt: new Date().toISOString()
-    };
-    setPlacements(prev =>
-      prev.map(p => (p.id === placementId ? { ...p, replies: [...p.replies, newReply] } : p))
-    );
   };
 
   // KEY REQUEST — asks another Self for access; they resolve it.
@@ -346,7 +326,6 @@ export function useSelvesState() {
     switchSelf,
     createPlacement,
     createPollPlacement,
-    addReply,
     requestKey,
     updateGraphPosition,
     toggleBookmark,

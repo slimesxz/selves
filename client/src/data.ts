@@ -148,19 +148,7 @@ export const SEED_PLACEMENTS: Placement[] = [
     content:
       'RAW INSTANCE: Operating systems structure agency. Social networks commodify sentiment. A person is a set of independent operating parameters. We must build walls around the modules to prevent memory leaks of the soul.',
     payloadType: 'text',
-    createdAt: '2026-07-06T22:30:00Z',
-    replies: [
-      {
-        id: 'reply_1',
-        placementId: 'place_1',
-        selfId: 'self_user_aether',
-        asSelfName: 'Aether',
-        asSelfColor: '#14b8a6',
-        asSelfIcon: 'Shield',
-        content: 'Memory leaks of the soul are what the old networks called "profiles." The flattened timeline was the tragedy.',
-        createdAt: '2026-07-06T23:15:00Z'
-      }
-    ]
+    createdAt: '2026-07-06T22:30:00Z'
   },
   {
     id: 'place_2',
@@ -171,8 +159,7 @@ export const SEED_PLACEMENTS: Placement[] = [
     payloadData: {
       mediaUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&q=80&w=600'
     },
-    createdAt: '2026-07-07T03:45:00Z',
-    replies: []
+    createdAt: '2026-07-07T03:45:00Z'
   },
   {
     id: 'place_3',
@@ -182,19 +169,7 @@ export const SEED_PLACEMENTS: Placement[] = [
       'Sending you both a small anchor from the archive. It is weighted. It holds a place for the correspondence we have been building.',
     payloadType: 'gift',
     payloadData: { giftName: 'Obsidian Monolith', giftSymbol: '⬛' },
-    createdAt: '2026-07-07T09:12:00Z',
-    replies: [
-      {
-        id: 'reply_2',
-        placementId: 'place_3',
-        selfId: 'self_user_aether',
-        asSelfName: 'Aether',
-        asSelfColor: '#14b8a6',
-        asSelfIcon: 'Shield',
-        content: 'Received. It sits well in the register. Thank you, Curator.',
-        createdAt: '2026-07-07T10:00:00Z'
-      }
-    ]
+    createdAt: '2026-07-07T09:12:00Z'
   },
   {
     id: 'place_4',
@@ -203,8 +178,7 @@ export const SEED_PLACEMENTS: Placement[] = [
     content: 'A question for the correspondents I trust with it.',
     payloadType: 'poll',
     payloadData: { pollId: 'poll_1' },
-    createdAt: '2026-07-07T10:30:00Z',
-    replies: []
+    createdAt: '2026-07-07T10:30:00Z'
   },
   {
     id: 'place_5',
@@ -212,7 +186,6 @@ export const SEED_PLACEMENTS: Placement[] = [
     recipientSelfIds: [],
     content: 'Draft, unsent: the register is honest in a way the feed never was. You always know exactly who is holding the letter.',
     payloadType: 'text',
-    createdAt: '2026-07-07T04:20:00Z',
-    replies: []
+    createdAt: '2026-07-07T04:20:00Z'
   }
 ];

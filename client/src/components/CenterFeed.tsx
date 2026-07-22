@@ -33,7 +33,6 @@ interface CenterFeedProps {
     payloadData?: Placement['payloadData']
   ) => string;
   createPollPlacement: (question: string, options: string[], recipientSelfIds: string[]) => void;
-  addReply: (placementId: string, content: string) => void;
   toggleBookmark: (placementId: string) => void;
   bookmarks: { [selfId: string]: string[] };
   voteInPoll: (pollId: string, optionId: string) => void;
@@ -60,7 +59,6 @@ export function CenterFeed({
   visiblePlacements,
   createPlacement,
   createPollPlacement,
-  addReply,
   toggleBookmark,
   bookmarks,
   voteInPoll,
@@ -78,7 +76,6 @@ export function CenterFeed({
   const [giftIdx, setGiftIdx] = useState(0);
   const [keyGrantType, setKeyGrantType] = useState<'timed' | 'permanent'>('permanent');
 
-  const [replyInputs, setReplyInputs] = useState<{ [id: string]: string }>({});
   const [errorBanner, setErrorBanner] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
 
@@ -171,14 +168,6 @@ export function CenterFeed({
     createPlacement(content.trim(), recipientIds, 'text');
     flashSuccess(`Placed. To: ${recipientNames}`);
     clearComposer();
-  };
-
-  const handleReplySubmit = (placementId: string, e: React.FormEvent) => {
-    e.preventDefault();
-    const replyText = replyInputs[placementId];
-    if (!replyText || !replyText.trim()) return;
-    addReply(placementId, replyText);
-    setReplyInputs({ ...replyInputs, [placementId]: '' });
   };
 
   return (
@@ -494,7 +483,7 @@ export function CenterFeed({
                   </div>
                 )}
 
-                {/* Row: bookmark + reply — no reactions, no counts */}
+                {/* Row: bookmark — no reactions, no counts */}
                 <div className="flex items-center justify-between pt-1.5 border-t border-neutral-900/70">
                   <span className="text-[8px] font-mono text-neutral-600 uppercase">
                     {placement.payloadType} placement
@@ -507,35 +496,6 @@ export function CenterFeed({
                     <Bookmark size={12} fill={isBookmarked ? 'currentColor' : 'none'} />
                   </button>
                 </div>
-
-                {/* Replies */}
-                {placement.replies.length > 0 && (
-                  <div className="space-y-2 pl-3 border-l border-neutral-900">
-                    {placement.replies.map(reply => (
-                      <div key={reply.id} className="text-[10px]">
-                        <span className="font-mono font-bold mr-1.5" style={{ color: reply.asSelfColor }}>
-                          {reply.asSelfName}
-                        </span>
-                        <span className="text-neutral-300 leading-relaxed">{reply.content}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!isVault && (
-                  <form onSubmit={(e) => handleReplySubmit(placement.id, e)} className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      placeholder={`Reply as ${currentSelf.name}...`}
-                      value={replyInputs[placement.id] || ''}
-                      onChange={(e) => setReplyInputs({ ...replyInputs, [placement.id]: e.target.value })}
-                      className="flex-1 bg-black border border-neutral-900 rounded px-2 py-1 text-[10px] text-neutral-200 focus:outline-none focus:border-neutral-700 placeholder:font-mono"
-                    />
-                    <button type="submit" className="text-neutral-500 hover:text-white transition-colors">
-                      <Send size={12} />
-                    </button>
-                  </form>
-                )}
               </div>
             );
           })}

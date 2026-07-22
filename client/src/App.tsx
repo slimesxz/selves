@@ -83,7 +83,6 @@ export default function App() {
               visiblePlacements={state.getVisiblePlacements()}
               createPlacement={state.createPlacement}
               createPollPlacement={state.createPollPlacement}
-              addReply={state.addReply}
               toggleBookmark={state.toggleBookmark}
               bookmarks={state.bookmarks}
               voteInPoll={state.voteInPoll}
