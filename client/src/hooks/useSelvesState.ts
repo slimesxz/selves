@@ -10,7 +10,6 @@ import {
   Self,
   Placement,
   Connection,
-  Notification,
   Poll,
   Reply,
   DerivedRing,
@@ -21,7 +20,6 @@ import {
   SEED_SELVES,
   SEED_PLACEMENTS,
   SEED_CONNECTIONS,
-  SEED_NOTIFICATIONS,
   SEED_POLLS
 } from '../data';
 
@@ -54,7 +52,6 @@ export function useSelvesState() {
   const [connections, setConnections] = useState<Connection[]>(() => load('selves_v2_connections', SEED_CONNECTIONS));
   const [keyGrants, setKeyGrants] = useState<KeyGrant[]>(() => load('selves_v2_keygrants', []));
   const [polls, setPolls] = useState<Poll[]>(() => load('selves_v2_polls', SEED_POLLS));
-  const [notifications, setNotifications] = useState<Notification[]>(() => load('selves_v2_notifs', SEED_NOTIFICATIONS));
   const [bookmarks, setBookmarks] = useState<{ [selfId: string]: string[] }>(() => load('selves_v2_bookmarks', {}));
 
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('Sent');
@@ -70,9 +67,8 @@ export function useSelvesState() {
     store.set('selves_v2_connections', JSON.stringify(connections));
     store.set('selves_v2_keygrants', JSON.stringify(keyGrants));
     store.set('selves_v2_polls', JSON.stringify(polls));
-    store.set('selves_v2_notifs', JSON.stringify(notifications));
     store.set('selves_v2_bookmarks', JSON.stringify(bookmarks));
-  }, [selves, currentSelfId, placements, connections, keyGrants, polls, notifications, bookmarks]);
+  }, [selves, currentSelfId, placements, connections, keyGrants, polls, bookmarks]);
 
   const currentSelf = selves.find(s => s.id === currentSelfId) || selves[0];
   const isOwn = (s: Self) => s.userId === 'user_1';
@@ -162,9 +158,6 @@ export function useSelvesState() {
         createdAt: new Date().toISOString()
       }));
       setKeyGrants(prev => [...newGrants, ...prev]);
-      recipientSelfIds.forEach(rid =>
-        sendNotification(rid, 'Key Received', `${currentSelf.name} sent you a ${grantType} key to their private correspondence.`, 'system')
-      );
     }
 
     return newPlacement.id;
@@ -219,29 +212,7 @@ export function useSelvesState() {
     };
     setKeyGrants(prev => [newGrant, ...prev]);
     triggerVisualSignal(currentSelfId, toSelfId);
-    sendNotification(
-      toSelfId,
-      'Key Requested',
-      `${currentSelf.name} is requesting a ${type} key to your private correspondence.`,
-      'key_request',
-      { grantId: newGrant.id, requesterSelfId: currentSelfId, type }
-    );
     return { success: true };
-  };
-
-  const resolveKeyGrant = (grantId: string, status: 'granted' | 'declined') => {
-    const grant = keyGrants.find(g => g.id === grantId);
-    if (!grant) return;
-    setKeyGrants(prev => prev.map(g => (g.id === grantId ? { ...g, status } : g)));
-    if (status === 'granted') triggerVisualSignal(grant.granterSelfId, grant.requesterSelfId);
-    sendNotification(
-      grant.requesterSelfId,
-      status === 'granted' ? 'Key Granted' : 'Key Declined',
-      status === 'granted'
-        ? `${currentSelf.name} granted you a ${grant.type} key.`
-        : `${currentSelf.name} declined your key request.`,
-      'system'
-    );
   };
 
   // BOUNDED DISCLOSURE — reveal controls per connection.
@@ -309,70 +280,7 @@ export function useSelvesState() {
     };
     setConnections(prev => [...prev, newConn]);
     triggerVisualSignal(currentSelfId, toSelfId);
-    sendNotification(toSelfId, 'Connection Invitation', `${currentSelf.name} invited you to connect.`, 'connection', {
-      connectionId: newConn.id,
-      fromSelfId: currentSelfId
-    });
     return { success: true };
-  };
-
-  const acceptConnection = (connectionId: string, _targetSelfId: string) => {
-    setConnections(prev => prev.map(c => (c.id === connectionId ? { ...c, status: 'connected' as const } : c)));
-    const connection = connections.find(c => c.id === connectionId);
-    if (connection) {
-      setConnections(prev => {
-        const reverseExists = prev.some(
-          c => c.fromSelfId === connection.toSelfId && c.toSelfId === connection.fromSelfId
-        );
-        if (reverseExists) return prev;
-        return [
-          ...prev,
-          {
-            id: `conn_rev_${Date.now()}`,
-            fromSelfId: connection.toSelfId,
-            toSelfId: connection.fromSelfId,
-            status: 'connected',
-            revealedDecision: { connectionExists: true, context: true, identity: true },
-            createdAt: new Date().toISOString()
-          }
-        ];
-      });
-      triggerVisualSignal(connection.toSelfId, connection.fromSelfId);
-      sendNotification(
-        connection.fromSelfId,
-        'Connection Accepted',
-        `${selves.find(s => s.id === connection.toSelfId)?.name} accepted your connection.`,
-        'system'
-      );
-    }
-  };
-
-  const declineConnection = (connectionId: string) => {
-    setConnections(prev => prev.map(c => (c.id === connectionId ? { ...c, status: 'declined' as const } : c)));
-  };
-
-  const sendNotification = (
-    selfId: string,
-    title: string,
-    message: string,
-    type: Notification['type'],
-    data?: any
-  ) => {
-    const newNotif: Notification = {
-      id: `notif_${Date.now()}_${Math.random()}`,
-      selfId,
-      title,
-      message,
-      type,
-      data,
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-  };
-
-  const markNotificationAsRead = (notifId: string) => {
-    setNotifications(prev => prev.map(n => (n.id === notifId ? { ...n, read: true } : n)));
   };
 
   /**
@@ -423,8 +331,6 @@ export function useSelvesState() {
   const hasKey = (holderId: string, granterId: string): boolean =>
     keyGrants.some(g => g.requesterSelfId === holderId && g.granterSelfId === granterId && g.status === 'granted');
 
-  const getActiveSelfNotifications = (): Notification[] => notifications.filter(n => n.selfId === currentSelfId);
-
   const factoryReset = () => {
     store.clear();
     setSelves(SEED_SELVES);
@@ -433,7 +339,6 @@ export function useSelvesState() {
     setConnections(SEED_CONNECTIONS);
     setKeyGrants([]);
     setPolls(SEED_POLLS);
-    setNotifications(SEED_NOTIFICATIONS);
     setBookmarks({});
     setFeedFilter('Sent');
     setInspectedSelfId(null);
@@ -447,7 +352,6 @@ export function useSelvesState() {
     connections,
     keyGrants,
     polls,
-    notifications,
     bookmarks,
     feedFilter,
     inspectedSelfId,
@@ -460,17 +364,12 @@ export function useSelvesState() {
     createPollPlacement,
     addReply,
     requestKey,
-    resolveKeyGrant,
     setBoundedDisclosure,
     updateGraphPosition,
     toggleBookmark,
     voteInPoll,
     initiateConnection,
-    acceptConnection,
-    declineConnection,
     getVisiblePlacements,
-    getActiveSelfNotifications,
-    markNotificationAsRead,
     deriveRing,
     correspondenceVolume,
     hasKey,

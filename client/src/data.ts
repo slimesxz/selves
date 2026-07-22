@@ -3,7 +3,7 @@
  * Every placement is addressed to visible recipients (or to no one: Vault).
  */
 
-import { Self, Placement, Connection, Notification, Poll } from './types';
+import { Self, Placement, Connection, Poll } from './types';
 
 export const SEED_SELVES: Self[] = [
   // The operator's Selves
@@ -221,18 +221,5 @@ export const SEED_PLACEMENTS: Placement[] = [
     payloadType: 'text',
     createdAt: '2026-07-07T04:20:00Z',
     replies: []
-  }
-];
-
-export const SEED_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'notif_1',
-    selfId: 'self_user_aether',
-    title: 'Key Requested',
-    message: 'Zero_Sum requested a permanent key to your private correspondence.',
-    type: 'key_request',
-    data: { requesterSelfId: 'self_c_zerosum', grantType: 'permanent' },
-    read: false,
-    createdAt: '2026-07-07T10:45:00Z'
   }
 ];

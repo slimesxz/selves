@@ -1,22 +1,17 @@
 /**
- * Left panel — Self registry, inbox, system.
+ * Left panel — Self registry, system.
  */
 
 import React, { useState } from 'react';
-import { Self, Notification } from '../types';
+import { Self } from '../types';
 import { IconRenderer } from './IconRenderer';
-import { Plus, Bell, Trash2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Check, X } from 'lucide-react';
 
 interface LeftSidebarProps {
   selves: Self[];
   currentSelfId: string;
   switchSelf: (id: string) => void;
   createSelf: (name: string, color: string, icon: string, bio: string) => { success: boolean; error?: string };
-  notifications: Notification[];
-  markNotificationAsRead: (id: string) => void;
-  resolveKeyGrant: (grantId: string, status: 'granted' | 'declined') => void;
-  acceptConnection: (connectionId: string, targetSelfId: string) => void;
-  declineConnection: (connectionId: string) => void;
   factoryReset: () => void;
 }
 
@@ -25,11 +20,6 @@ export function LeftSidebar({
   currentSelfId,
   switchSelf,
   createSelf,
-  notifications,
-  markNotificationAsRead,
-  resolveKeyGrant,
-  acceptConnection,
-  declineConnection,
   factoryReset
 }: LeftSidebarProps) {
   const [isCreating, setIsCreating] = useState(false);
@@ -38,13 +28,10 @@ export function LeftSidebar({
   const [newIcon, setNewIcon] = useState('Compass');
   const [newBio, setNewBio] = useState('');
   const [creationError, setCreationError] = useState('');
-  const [activeTab, setActiveTab] = useState<'selves' | 'notifs' | 'system'>('selves');
+  const [activeTab, setActiveTab] = useState<'selves' | 'system'>('selves');
 
   const userSelves = selves.filter(s => s.userId === 'user_1');
   const activeSelf = userSelves.find(s => s.id === currentSelfId) || userSelves[0];
-
-  const activeNotifications = notifications.filter(n => n.selfId === currentSelfId);
-  const unreadNotifsCount = activeNotifications.filter(n => !n.read).length;
 
   const iconOptions = ['Shield', 'BookOpen', 'Moon', 'Terminal', 'Library', 'Compass', 'Eye', 'PenTool', 'Cpu'];
   const colorOptions = [
@@ -94,23 +81,13 @@ export function LeftSidebar({
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 border-b border-neutral-900 text-center font-mono text-[10px] uppercase">
+      <div className="grid grid-cols-2 border-b border-neutral-900 text-center font-mono text-[10px] uppercase">
         <button
           id="tab-selves"
           onClick={() => setActiveTab('selves')}
           className={`py-2 border-r border-neutral-900 transition-colors ${activeTab === 'selves' ? 'bg-neutral-900 text-neutral-100 font-bold border-b border-b-white' : 'hover:bg-neutral-900/50 text-neutral-500'}`}
         >
           Selves
-        </button>
-        <button
-          id="tab-notifs"
-          onClick={() => setActiveTab('notifs')}
-          className={`py-2 border-r border-neutral-900 relative transition-colors ${activeTab === 'notifs' ? 'bg-neutral-900 text-neutral-100 font-bold border-b border-b-white' : 'hover:bg-neutral-900/50 text-neutral-500'}`}
-        >
-          Inbox
-          {unreadNotifsCount > 0 && (
-            <span className="absolute right-2 top-2 w-2 h-2 rounded-full bg-red-500"></span>
-          )}
         </button>
         <button
           id="tab-system"
@@ -287,96 +264,6 @@ export function LeftSidebar({
               </div>
             </div>
 
-          </div>
-        )}
-
-        {/* INBOX */}
-        {activeTab === 'notifs' && (
-          <div className="space-y-3 flex-1 flex flex-col justify-between">
-            <div className="space-y-2">
-              <span className="text-[9px] font-mono uppercase text-neutral-500 font-bold tracking-wider">
-                INBOX ({activeNotifications.length})
-              </span>
-
-              {activeNotifications.length === 0 ? (
-                <div className="p-6 border border-neutral-900 bg-neutral-950 rounded-lg text-center text-[10px] text-neutral-600 font-mono">
-                  Nothing waiting for this Self.
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                  {activeNotifications.map(notif => (
-                    <div
-                      key={notif.id}
-                      className={`p-2.5 border rounded text-xs transition-colors ${notif.read ? 'bg-neutral-950 border-neutral-900/60 text-neutral-400' : 'bg-neutral-900 border-neutral-800 text-neutral-200'}`}
-                      onClick={() => markNotificationAsRead(notif.id)}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-neutral-100 text-[10px] uppercase font-mono flex items-center gap-1">
-                          <Bell size={10} className={notif.read ? 'text-neutral-600' : 'text-amber-500'} />
-                          {notif.title}
-                        </span>
-                        {!notif.read && (
-                          <span className="text-[7px] bg-amber-950 border border-amber-800 text-amber-500 px-0.5 rounded font-mono uppercase">Unread</span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-neutral-400 font-mono leading-relaxed mb-2">
-                        {notif.message}
-                      </p>
-
-                      {!notif.read && notif.type === 'key_request' && notif.data?.grantId && (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-neutral-800">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resolveKeyGrant(notif.data.grantId, 'granted');
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-100 hover:bg-neutral-200 text-black text-[9px] font-bold rounded font-mono"
-                          >
-                            <Check size={8} /> GRANT KEY
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resolveKeyGrant(notif.data.grantId, 'declined');
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] font-bold rounded font-mono"
-                          >
-                            <X size={8} /> DECLINE
-                          </button>
-                        </div>
-                      )}
-
-                      {!notif.read && notif.type === 'connection' && notif.data?.connectionId && (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-neutral-800">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              acceptConnection(notif.data.connectionId, currentSelfId);
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-100 hover:bg-neutral-200 text-black text-[9px] font-bold rounded font-mono"
-                          >
-                            <Check size={8} /> CONNECT
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              declineConnection(notif.data.connectionId);
-                              markNotificationAsRead(notif.id);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] font-bold rounded font-mono"
-                          >
-                            <X size={8} /> DECLINE
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 

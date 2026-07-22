@@ -53,11 +53,6 @@ export default function App() {
             currentSelfId={state.currentSelfId}
             switchSelf={state.switchSelf}
             createSelf={state.createSelf}
-            notifications={state.notifications}
-            markNotificationAsRead={state.markNotificationAsRead}
-            resolveKeyGrant={state.resolveKeyGrant}
-            acceptConnection={state.acceptConnection}
-            declineConnection={state.declineConnection}
             factoryReset={state.factoryReset}
           />
         </div>
