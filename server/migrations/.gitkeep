@@ -1,0 +1,2 @@
+# Migration files land here (Phase 3+). Empty in Phase 2 by design:
+# it proves the runner works from zero without creating any domain schema.
