@@ -40,3 +40,26 @@ export async function issueSession(
 export async function revokeSession(db: Queryable, tokenHash: Buffer): Promise<void> {
   await db.query('SELECT auth.revoke_session($1)', [tokenHash]);
 }
+
+/** Is this Self owned by this account? Checked against the authoritative store on
+ *  every protected Self-scoped request — a prior success is never standing auth. */
+export async function selfOwnedByAccount(db: Queryable, selfId: string, account: string): Promise<boolean> {
+  const { rows } = await db.query('SELECT 1 AS ok FROM public.selves WHERE id = $1 AND account_id = $2', [selfId, account]);
+  return rows.length > 0;
+}
+
+export interface SelfSummary {
+  id: string;
+  name: string;
+  slot: number;
+}
+
+/** The account's own Selves, deterministically ordered by slot. Supports the
+ *  ratified Self switcher. Account-scoped: no acting-Self context required. */
+export async function listSelves(db: Queryable, account: string): Promise<SelfSummary[]> {
+  const { rows } = await db.query<{ id: string; name: string; self_slot: number }>(
+    'SELECT id, name, self_slot FROM public.selves WHERE account_id = $1 ORDER BY self_slot',
+    [account],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, slot: r.self_slot }));
+}

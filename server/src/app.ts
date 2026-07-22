@@ -13,7 +13,12 @@ import cors from '@fastify/cors';
 import type { AppConfig } from './config.ts';
 import type { Queryable } from './db.ts';
 import { sha256, newSessionToken } from './crypto.ts';
-import { authenticateSession, issueSession, revokeSession } from './auth/queries.ts';
+import { authenticateSession, issueSession, listSelves, revokeSession, selfOwnedByAccount } from './auth/queries.ts';
+
+// A single lowercase UUID assertion. Rejects empty, malformed, and duplicate
+// headers alike (duplicates arrive comma-joined and fail this test), so the
+// server never silently substitutes a Self.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -73,6 +78,29 @@ export function makeAuthenticate(db: Queryable, config: AppConfig) {
   };
 }
 
+/** Per-route preHandler for Self-scoped routes. Validates the X-Acting-Self
+ *  assertion and verifies ownership against the authoritative store on EVERY
+ *  request (never cached). Must run after authenticate. */
+export function makeVerifyActingSelf(db: Queryable) {
+  return async function verifyActingSelf(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const raw = req.headers['x-acting-self'];
+    if (typeof raw !== 'string' || !UUID_RE.test(raw)) {
+      await reply.code(400).send({ error: 'self_context_required' });
+      return;
+    }
+    if (!req.account) {
+      await reply.code(401).send({ error: 'unauthenticated' });
+      return;
+    }
+    const owned = await selfOwnedByAccount(db, raw, req.account);
+    if (!owned) {
+      await reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+    req.actingSelf = raw;
+  };
+}
+
 export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   const { db, config } = opts;
   const app = Fastify({
@@ -118,8 +146,16 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     await reply.code(404).send({ error: 'not_found' });
   });
 
+  const authenticate = makeAuthenticate(db, config);
+
   // ── routes ─────────────────────────────────────────────────────────────────
   app.get('/health', async () => ({ status: 'ok' }));
+
+  // Account-scoped: requires authentication, but NO acting-Self context. Returns
+  // only the caller's own Selves, deterministically ordered by slot (switcher).
+  app.get('/auth/selves', { preHandler: authenticate }, async (req: FastifyRequest) => {
+    return listSelves(db, req.account as string);
+  });
 
   // Login (the exempt "login surface"): verify the enrollment secret, mint a
   // session, set the cookie. The response body never carries the token.

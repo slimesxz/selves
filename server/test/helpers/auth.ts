@@ -52,6 +52,28 @@ export async function enroll(
   return { accountId: r.account_id, selfId: r.self_id, credentialId: r.credential_id, secret };
 }
 
+/** Add another Self to an account (superuser; test-only — self creation is a
+ *  future phase). Returns the new Self id. */
+export async function addSelf(su: pg.Pool, accountId: string, slot: number, name: string): Promise<string> {
+  const { rows } = await su.query<{ id: string }>(
+    'INSERT INTO public.selves (account_id, self_slot, name) VALUES ($1, $2, $3) RETURNING id',
+    [accountId, slot, name],
+  );
+  return rows[0]!.id;
+}
+
+/** Reassign a Self to another account — a constraint-legal ownership change used
+ *  to prove a prior ownership check never becomes standing authorization. */
+export async function reassignSelf(su: pg.Pool, selfId: string, newAccountId: string): Promise<void> {
+  await su.query('UPDATE public.selves SET account_id = $1 WHERE id = $2', [newAccountId, selfId]);
+}
+
+/** A fresh account with no Selves (superuser). */
+export async function newEmptyAccount(su: pg.Pool): Promise<string> {
+  const { rows } = await su.query<{ id: string }>('INSERT INTO public.accounts DEFAULT VALUES RETURNING id');
+  return rows[0]!.id;
+}
+
 /** Extract a Set-Cookie value for a given cookie name from an inject() response. */
 export function cookieFromSetCookie(setCookie: string | string[] | undefined, name: string): string | undefined {
   const headers = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
