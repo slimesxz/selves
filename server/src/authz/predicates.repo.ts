@@ -44,3 +44,75 @@ export interface PredicatesRepo {
   artifactFacts(tx: Tx, actingSelf: string, artifactId: string): Promise<ArtifactFacts>;
   placementFacts(tx: Tx, actingSelf: string, placementId: string): Promise<PlacementFacts>;
 }
+
+/** The PostgreSQL implementation. Each query is bound to the acting Self and the
+ *  requested resource; none loads a cross-Self superset. Requires only the
+ *  column-scoped SELECT grants added in the P5-B migration. */
+export function createPredicatesRepo(): PredicatesRepo {
+  return {
+    async artifactFacts(tx, actingSelf, artifactId) {
+      // (a) existence + authorship
+      const a = await tx.query<{ author_self_id: string | null }>(
+        'SELECT author_self_id FROM public.artifacts WHERE id = $1',
+        [artifactId],
+      );
+      const present = a.rows.length > 0;
+      const authorSelfId = present ? (a.rows[0]?.author_self_id ?? null) : null;
+
+      // (b) recipient ground, state-resolved, across every placement carrying it
+      const r = await tx.query<{ any_settled: boolean | null; any_recipient: boolean | null }>(
+        `SELECT bool_or(p.state = 'settled') AS any_settled,
+                count(*) > 0                 AS any_recipient
+           FROM public.placements p
+           JOIN public.placement_recipients pr ON pr.placement_id = p.id
+          WHERE p.artifact_id = $1 AND pr.recipient_self_id = $2`,
+        [artifactId, actingSelf],
+      );
+
+      // (c) Key ground — actor-scoped only, so a Key to a DIFFERENT resource is
+      // seen (has_active_elsewhere) and classified KEY_WRONG_RESOURCE, not
+      // silently ignored (Gate 1 §4, addendum §4 correction).
+      const k = await tx.query<{
+        has_active_for_target: boolean | null;
+        has_revoked_for_target: boolean | null;
+        has_active_elsewhere: boolean | null;
+      }>(
+        `SELECT bool_or(revoked_at IS NULL     AND protected_resource_id =  $2) AS has_active_for_target,
+                bool_or(revoked_at IS NOT NULL AND protected_resource_id =  $2) AS has_revoked_for_target,
+                bool_or(revoked_at IS NULL     AND protected_resource_id <> $2) AS has_active_elsewhere
+           FROM public.key_grants
+          WHERE grantee_self_id = $1`,
+        [actingSelf, artifactId],
+      );
+
+      return {
+        present,
+        authorSelfId,
+        anySettledRecipient: r.rows[0]?.any_settled === true,
+        anyRecipient: r.rows[0]?.any_recipient === true,
+        hasActiveForTarget: k.rows[0]?.has_active_for_target === true,
+        hasRevokedForTarget: k.rows[0]?.has_revoked_for_target === true,
+        hasActiveElsewhere: k.rows[0]?.has_active_elsewhere === true,
+      };
+    },
+
+    async placementFacts(tx, actingSelf, placementId) {
+      const p = await tx.query<{ sender_self_id: string | null; state: string | null }>(
+        'SELECT sender_self_id, state FROM public.placements WHERE id = $1',
+        [placementId],
+      );
+      const present = p.rows.length > 0;
+      const recipient = await tx.query(
+        `SELECT 1 AS ok FROM public.placement_recipients
+          WHERE placement_id = $1 AND recipient_self_id = $2 LIMIT 1`,
+        [placementId, actingSelf],
+      );
+      return {
+        present,
+        senderSelfId: present ? (p.rows[0]?.sender_self_id ?? null) : null,
+        state: present ? (p.rows[0]?.state ?? null) : null,
+        recipientRow: recipient.rows.length > 0,
+      };
+    },
+  };
+}
