@@ -4,6 +4,7 @@ import { appTxPool } from '../../src/db.ts';
 import { createAuthorizationService } from '../../src/authz/service.ts';
 import { createPredicatesRepo } from '../../src/authz/predicates.repo.ts';
 import { createDomainRepo } from '../../src/authz/domain.repo.ts';
+import { createMutationsRepo } from '../../src/authz/mutations.repo.ts';
 import type { PredicatesRepo } from '../../src/authz/predicates.repo.ts';
 import type { DomainRepo } from '../../src/authz/domain.repo.ts';
 import type { DecisionSink } from '../../src/authz/reasons.ts';
@@ -71,8 +72,10 @@ export function makeInstrumentedAuthz(l: Ledger): AuthzHarness {
   const su = superuserPool();
   const service = createAuthorizationService({
     txPool: appTxPool(appPool),
+    db: appPool,
     predicates: recordingPredicates(createPredicatesRepo(), l),
     domain: recordingDomain(createDomainRepo(), l),
+    mutations: createMutationsRepo(),
     sink: ledgerSink(l),
   });
   return {

@@ -57,12 +57,42 @@ export interface PublicError {
 
 // A single-resource read that does not resolve to an allow maps here, uniformly.
 export const NOT_FOUND: PublicError = { status: 404, body: { error: 'not_found' } };
+// Mutation outcomes add two public shapes (decision 0006, ruling 7). CONFLICT is
+// only ever returned to an AUTHORIZED actor (the author/sender) whose action hit a
+// wrong state or lost a race — it never distinguishes existence for an outsider.
+export const CONFLICT: PublicError = { status: 409, body: { error: 'conflict' } };
+export const BAD_REQUEST: PublicError = { status: 400, body: { error: 'bad_request' } };
 
 /** Map any denied single-resource read outcome to the uniform public response.
  *  The internal reason is deliberately not consulted — there is no existence
  *  oracle and no internal reason reaches the caller. */
 export function mapDenied(): PublicError {
   return NOT_FOUND;
+}
+
+/** Map a domain mutation failure's SQLSTATE to the ratified split (ruling 7):
+ *  404 unauthorized/absent, 409 authorized wrong-state/conflict, 400 malformed.
+ *  The custom PT4xx codes are raised by the `domain.*` DEFINER functions;
+ *  structural constraint violations (empty body, unknown recipient, guard/freeze
+ *  backstops) surface as 23xxx and map to 400. An unrecognized code returns null
+ *  so the caller fails closed with a generic 500 rather than guessing. As with
+ *  reads, the public body is generic — the SQLSTATE only selects the status and
+ *  never reaches the client. */
+export function mapMutationError(sqlstate: string | undefined): PublicError | null {
+  switch (sqlstate) {
+    case 'PT404':
+      return NOT_FOUND;
+    case 'PT409':
+    case '23505': // unique_violation — not reachable in P6 flows; a conflict if it were
+      return CONFLICT;
+    case 'PT400':
+    case '23514': // check_violation (empty text body, bounded interval, guard/freeze)
+    case '23503': // foreign_key_violation (unknown recipient / self)
+    case '22P02': // invalid uuid text (route validates first; belt-and-braces)
+      return BAD_REQUEST;
+    default:
+      return null;
+  }
 }
 
 // ── decision sink (§12): observation via DI only. ─────────────────────────────

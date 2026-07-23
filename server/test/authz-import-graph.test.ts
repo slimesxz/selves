@@ -29,6 +29,7 @@ const RAW_POOL_BINDINGS = new Set(['appPool', 'appTxPool']);
 const INTERNAL_REPOS = new Set([
   resolve(SRC, 'authz/predicates.repo.ts'),
   resolve(SRC, 'authz/domain.repo.ts'),
+  resolve(SRC, 'authz/mutations.repo.ts'),
 ]);
 
 // EXACT file-specific allowlists (repository state at implementation; no

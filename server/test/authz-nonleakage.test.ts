@@ -9,6 +9,7 @@ import { appTxPool } from '../src/db.ts';
 import { createAuthorizationService } from '../src/authz/service.ts';
 import { createPredicatesRepo } from '../src/authz/predicates.repo.ts';
 import { createDomainRepo } from '../src/authz/domain.repo.ts';
+import { createMutationsRepo } from '../src/authz/mutations.repo.ts';
 import { appTestPool, bootstrapPool, cookieFromSetCookie, enroll, superuserPool } from './helpers/auth.ts';
 import { newAccount, newArtifact, newSelf } from './helpers/authz.ts';
 import { buildAuthzAdapter } from './helpers/authz-adapter.ts';
@@ -33,8 +34,10 @@ beforeAll(async () => {
   boot = bootstrapPool();
   const service = createAuthorizationService({
     txPool: appTxPool(appPool),
+    db: appPool,
     predicates: createPredicatesRepo(),
     domain: createDomainRepo(),
+    mutations: createMutationsRepo(),
   });
   adapter = await buildAuthzAdapter({ db: appPool, config, service });
   prod = await buildApp({ db: appPool, config });

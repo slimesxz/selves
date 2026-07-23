@@ -6,10 +6,11 @@
 // This file declares the public contract. The factory (createAuthorizationService)
 // and the pure decision functions arrive in P5-C.
 import type { Artifact, Placement, PlacementRecipient } from '../domain/records.ts';
-import type { SelfId } from '../domain/ids.ts';
-import type { Tx, TxPool } from '../db.ts';
+import type { AccountId, SelfId } from '../domain/ids.ts';
+import type { Queryable, Tx, TxPool } from '../db.ts';
 import type { ArtifactFacts, PlacementFacts, PredicatesRepo } from './predicates.repo.ts';
 import type { DomainRepo } from './domain.repo.ts';
+import type { MutationsRepo } from './mutations.repo.ts';
 import type { ArtifactAllowGround, DecisionSink, Outcome, PlacementAllowGround } from './reasons.ts';
 import { NoopSink, isAllow } from './reasons.ts';
 import { PLACEMENT_STATES } from '../domain/placement.ts';
@@ -22,6 +23,16 @@ export interface ActingContext {
   readonly actingSelf: SelfId;
 }
 
+// Account-scoped context for the one operation whose authority is the AUTHENTICATED
+// ACCOUNT, not an acting Self: the departure interval is an account-level setting
+// (decision 0006, ruling 3). The account id comes from the same verified
+// authentication context the auth subsystem uses (req.account); it is never
+// derived by resolving the acting-Self header back to an account, and never read
+// from the request body.
+export interface AccountContext {
+  readonly account: AccountId;
+}
+
 // A single-resource read result. On deny, the caller receives an opaque
 // { ok: false } — no reason, no existence signal. The public mapper turns it
 // into the uniform 404 (§13). There is no reusable allow: the value is the
@@ -30,6 +41,7 @@ export interface ActingContext {
 export type Visible<T> = { readonly ok: true; readonly value: T } | { readonly ok: false };
 
 export interface AuthorizationService {
+  // ── Phase-5 reads (unchanged) ───────────────────────────────────────────────
   readArtifact(ctx: ActingContext, artifactId: string): Promise<Visible<Artifact>>;
   listOwnedArtifacts(ctx: ActingContext): Promise<Artifact[]>;
   readPlacement(ctx: ActingContext, placementId: string): Promise<Visible<Placement>>;
@@ -38,6 +50,21 @@ export interface AuthorizationService {
     ctx: ActingContext,
     placementId: string,
   ): Promise<PlacementRecipient[]>;
+
+  // ── Phase-6 mutations (decision 0006) ───────────────────────────────────────
+  // Each is bound to the verified acting Self and delegates to exactly one
+  // `domain.*` DEFINER function. On failure the function's SQLSTATE propagates
+  // unchanged; the route adapter maps it via reasons.mapMutationError. No mutation
+  // reads or returns a protected payload — create_* return only the new id.
+  createArtifact(ctx: ActingContext, textBody: string): Promise<string>;
+  createPlacementDraft(ctx: ActingContext, artifactId: string): Promise<string>;
+  addRecipient(ctx: ActingContext, placementId: string, recipientSelf: string): Promise<void>;
+  removeRecipient(ctx: ActingContext, placementId: string, recipientSelf: string): Promise<void>;
+  beginDeparture(ctx: ActingContext, placementId: string): Promise<void>;
+  cancelPlacement(ctx: ActingContext, placementId: string): Promise<void>;
+  settlePlacement(ctx: ActingContext, placementId: string): Promise<void>;
+  // Account-scoped (NOT acting-Self-bound): authority is the authenticated account.
+  setDepartureInterval(ctx: AccountContext, seconds: number): Promise<void>;
 }
 
 // ── pure decision functions (no I/O; exported for direct unit testing) ────────
@@ -80,8 +107,12 @@ export function decidePlacement(facts: PlacementFacts, actingSelf: string): Outc
 
 export interface ServiceDeps {
   readonly txPool: TxPool;
+  /** The app pool as a plain Queryable, for single-statement DEFINER mutations
+   *  (each does its own locking; no REPEATABLE READ wrapper is used for writes). */
+  readonly db: Queryable;
   readonly predicates: PredicatesRepo;
   readonly domain: DomainRepo;
+  readonly mutations: MutationsRepo;
   /** Injected only by tests; production passes nothing and gets NoopSink. */
   readonly sink?: DecisionSink;
 }
@@ -91,7 +122,7 @@ export interface ServiceDeps {
  *  protected read on ONE request-local REPEATABLE READ transaction and snapshot
  *  (decision record 0005). No allow value crosses a boundary. */
 export function createAuthorizationService(deps: ServiceDeps): AuthorizationService {
-  const { txPool, predicates, domain } = deps;
+  const { txPool, db, predicates, domain, mutations } = deps;
   const sink: DecisionSink = deps.sink ?? NoopSink;
 
   const readSingle = async <T>(
@@ -147,6 +178,36 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
         sink.onDecision('listRecipientsOfAuthoredPlacement', { kind: 'allow', ground: 'AUTHOR_RECIPIENT_LIST' });
         return rows;
       });
+    },
+
+    // ── mutations: each binds the write to the verified acting Self and delegates
+    // to one DEFINER function. Failures propagate with the function's SQLSTATE for
+    // the route adapter to map; authorization is enforced inside the function.
+    createArtifact(ctx, textBody) {
+      return mutations.createArtifact(db, ctx.actingSelf, textBody);
+    },
+    createPlacementDraft(ctx, artifactId) {
+      return mutations.createPlacementDraft(db, ctx.actingSelf, artifactId);
+    },
+    addRecipient(ctx, placementId, recipientSelf) {
+      return mutations.addRecipient(db, ctx.actingSelf, placementId, recipientSelf);
+    },
+    removeRecipient(ctx, placementId, recipientSelf) {
+      return mutations.removeRecipient(db, ctx.actingSelf, placementId, recipientSelf);
+    },
+    beginDeparture(ctx, placementId) {
+      return mutations.beginDeparture(db, ctx.actingSelf, placementId);
+    },
+    cancelPlacement(ctx, placementId) {
+      return mutations.cancelPlacement(db, ctx.actingSelf, placementId);
+    },
+    settlePlacement(ctx, placementId) {
+      return mutations.settlePlacement(db, ctx.actingSelf, placementId);
+    },
+    // Account-scoped: the account id comes from the verified authentication
+    // context (AccountContext), never from an acting Self.
+    setDepartureInterval(ctx, seconds) {
+      return mutations.setDepartureInterval(db, ctx.account, seconds);
     },
   };
 }

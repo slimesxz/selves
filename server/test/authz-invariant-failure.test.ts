@@ -5,7 +5,8 @@ import {
 } from '../src/authz/service.ts';
 import type { ArtifactFacts, PlacementFacts, PredicatesRepo } from '../src/authz/predicates.repo.ts';
 import type { DomainRepo } from '../src/authz/domain.repo.ts';
-import type { Tx, TxPool } from '../src/db.ts';
+import type { MutationsRepo } from '../src/authz/mutations.repo.ts';
+import type { Queryable, Tx, TxPool } from '../src/db.ts';
 import { actingCtx, capturingSink } from './helpers/authz.ts';
 
 // P5-D — INVARIANT_FAILURE (Gate 1 §5/§9, addendum §2). Impossible authoritative
@@ -58,6 +59,20 @@ const throwingTx: Tx = {
 const fakeTxPool: TxPool = {
   withRepeatableRead: (fn) => fn(throwingTx),
 };
+// This suite exercises only the read decision path; the write dependencies must
+// never be touched here, so they throw if used.
+const throwingDb: Queryable = {
+  query() {
+    throw new Error('db must not be used on the invariant-failure read path');
+  },
+};
+const throwingMutations = new Proxy({} as MutationsRepo, {
+  get() {
+    return () => {
+      throw new Error('mutations must not be used on the invariant-failure read path');
+    };
+  },
+});
 
 describe('service fails closed on invariant_failure with no protected read', () => {
   it('readArtifact denies (opaque) and never enters the domain repo', async () => {
@@ -92,8 +107,10 @@ describe('service fails closed on invariant_failure with no protected read', () 
     const cap = capturingSink();
     const service = createAuthorizationService({
       txPool: fakeTxPool,
+      db: throwingDb,
       predicates: impossiblePredicates,
       domain: spyDomain,
+      mutations: throwingMutations,
       sink: cap.sink,
     });
 

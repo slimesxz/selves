@@ -2,11 +2,12 @@ import './env';
 import pg from 'pg';
 import { appTestPool, superuserPool } from './auth.ts';
 import { appTxPool } from '../../src/db.ts';
-import { createAuthorizationService, type AuthorizationService, type ActingContext } from '../../src/authz/service.ts';
+import { createAuthorizationService, type AuthorizationService, type ActingContext, type AccountContext } from '../../src/authz/service.ts';
 import { createPredicatesRepo } from '../../src/authz/predicates.repo.ts';
 import { createDomainRepo } from '../../src/authz/domain.repo.ts';
+import { createMutationsRepo } from '../../src/authz/mutations.repo.ts';
 import type { DecisionSink, Outcome } from '../../src/authz/reasons.ts';
-import type { SelfId } from '../../src/domain/ids.ts';
+import type { AccountId, SelfId } from '../../src/domain/ids.ts';
 import type { PlacementState } from '../../src/domain/placement.ts';
 
 // Wires the REAL AuthorizationService over a selves_app connection (appTestPool),
@@ -26,8 +27,10 @@ export function makeAuthz(sink?: DecisionSink): AuthzHarness {
   const su = superuserPool();
   const service = createAuthorizationService({
     txPool: appTxPool(appPool),
+    db: appPool,
     predicates: createPredicatesRepo(),
     domain: createDomainRepo(),
+    mutations: createMutationsRepo(),
     ...(sink ? { sink } : {}),
   });
   return {
@@ -42,6 +45,11 @@ export function makeAuthz(sink?: DecisionSink): AuthzHarness {
 
 export function actingCtx(selfId: string): ActingContext {
   return { actingSelf: selfId as SelfId };
+}
+
+// Account-scoped context (the authenticated account), for set_departure_interval.
+export function accountCtx(accountId: string): AccountContext {
+  return { account: accountId as AccountId };
 }
 
 /** A sink that records every decision, for reason/ground assertions. */
