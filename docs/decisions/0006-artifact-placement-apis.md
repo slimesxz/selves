@@ -148,4 +148,65 @@ weakens them.
 `P6-A` charter amendment + this record · `P6-B` migrations (interval columns,
 `domain` schema, eight DEFINER functions, grants) · `P6-C` mutations repo +
 service surface + import-graph allowlist · `P6-D` routes with 404/409/400 mapping ·
-`P6-E` adversarial/transition/race/snapshot/floor test suite.
+`P6-E` adversarial/transition/race/snapshot/floor test suite · `P6-F` this
+audit-phase amendment.
+
+## Audit-phase amendments (P6-F, ruled by Liberty 2026-07-23)
+
+These entries are **additive**. They correct or extend the record for matters
+first established during the Gate-2 audit; the original Gate-1 rulings above are
+preserved unchanged. Each is marked with when it was established. This is an
+additive commit: P6-A (which first recorded this document) is neither rebased nor
+amended.
+
+### A1 — General authorization-domain principle *(established during Gate-2 audit, 2026-07-23)*
+
+**Account-scoped authority and Self-scoped authority are distinct authorization
+grounds; neither may be treated as a proxy for the other without an explicit
+constitutional ruling.** An operation authorized by the authenticated **account**
+takes its authority from the account identity directly and must not derive it by
+resolving an acting Self to an account; an operation authorized by an acting
+**Self** takes its authority from the verified acting Self and must not be
+satisfied by mere account ownership of some sibling Self. **First application:**
+`set_departure_interval` is **account-bound** (authority = the authenticated
+account, `AccountContext` / `req.account`; it accepts no acting Self and resolves
+none); the seven Artifact/Placement mutations — `create_artifact`,
+`create_placement_draft`, `add_recipient`, `remove_recipient`, `begin_departure`,
+`cancel_placement`, `settle_placement` — are **Self-bound** (authority = the
+verified acting Self). This principle was intentionally withheld from the issued
+Gate-1 text and surfaced by audit; it enters the record additively.
+
+### A2 — Open-gate amendment rule *(established during Gate-2 audit, 2026-07-23)*
+
+Amendment corrects commits that were **defective relative to the instructions in
+force at commit time**. Requirements the chamber intentionally withheld from the
+issued gate text and first established during audit enter the record
+**additively** (as here). Commits **inside an open gate**, while **unpushed and
+unaudited**, may therefore be amended **only to restore conformance with issued
+instructions** (e.g. the P6-B migration correction). **Append-only protection
+begins at gate closure and report acceptance**; thereafter commits are historical
+facts and corrections are made forward, never by rewrite.
+
+### A3 — Privilege correction *(corrects the Gate-1 privilege delta above; final shape established in P6-B/P6-C)*
+
+The Privilege-delta bullet above (§Privilege delta) reflected an earlier design in
+which a predicate read `accounts.departure_interval_seconds` as `selves_app`. The
+delivered and ratified shape is different and supersedes it: **`selves_app` holds
+no privilege — no DML and no `SELECT` — on `accounts`.** The interval is read and
+written **only inside** the hardened `SECURITY DEFINER` functions
+(`begin_departure`, `set_departure_interval`), which run as `selves_owner`. The
+"nothing at all on accounts" privilege matrix (proven by `authz-privileges`) is
+intact.
+
+### A4 — `403` / Q7 scope adjudication *(established during Gate-2 audit, 2026-07-23)*
+
+An **invalid acting-Self/account binding** is an **upstream identity-context
+failure** and returns **`403`** from the Phase-4 `verifyActingSelf` middleware
+(principle: 0004 R2; numeric status: P4-D `src/app.ts` + `active-self.test.ts`).
+It occurs before any `ActingContext` exists and without naming or inspecting any
+Artifact/Placement, so the Q7 non-leakage mapping does not govern it. **After a
+verified acting Self exists**, an unauthorized or absent Artifact/Placement
+mutation target maps to **`404`** under ruling 7 (Q7). The Gate-1 packet's item-9
+adversarial plan was **overbroad** in folding forged `X-Acting-Self` into the
+item-8 (`404`) mapping; the delivered `403` is ratified as conformant, and code and
+tests are unchanged.
