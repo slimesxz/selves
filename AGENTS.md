@@ -93,9 +93,18 @@ Irreversibility belongs to **settlement**, not to the button press.
 **Placement state machine:** `Draft → Departing → Settled`
 
 - **Draft** — editable.
-- **Departing** — Send pressed; a short, uniform inline **Cancel** remains
-  available. This window exists to catch motor errors (wrong recipient,
-  wrong Self, accidental click), not to soften social consequences.
+- **Departing** — Send pressed; an inline **Cancel** remains available for
+  the departure interval. This window exists to catch motor errors (wrong
+  recipient, wrong Self, accidental click), not to soften social
+  consequences. The interval is a **descriptive, account-level setting**
+  (not a per-transmission or per-Self policy): the user configures it, the
+  **server is authoritative** over its value, and it is bounded to the
+  closed list **{5, 10, 30, 60} seconds, default 30**. Its value is
+  **snapshotted onto the Placement at the moment of departure**; a later
+  change to the account setting never alters an in-progress departure.
+  Settlement is **client-initiated** and permitted only once the snapshotted
+  interval has elapsed (server-enforced floor); there is no automatic
+  settlement, and a Placement left in Departing simply remains cancellable.
 - **Settled** — the recipient boundary has been crossed. The Placement
   cannot be recalled.
 
