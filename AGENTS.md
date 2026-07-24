@@ -117,11 +117,33 @@ Irreversibility belongs to **settlement**, not to the button press.
   transfer rules.
 - **Key** — remains revocable, because a Key is an ongoing **capability**,
   not settled content. Revocation ends future access; it cannot undo access
-  already exercised.
+  already exercised. A Key is issued **as a Placement** (see Key transmission
+  below), never as an Artifact.
 
 > **Governing law:** A Placement may be stopped before it arrives. Once
 > received, its history belongs to every party it reached. Capabilities may
 > be revoked prospectively; disclosure cannot be erased retroactively.
+
+**Key transmission — ratified 2026-07-24 (P7-A).** A Key is a capability
+payload carried by an ordinary Placement through the ordinary
+`Draft → Departing → Settled` lifecycle; it is never an Artifact and never
+content. Settlement of the Placement establishes the authoritative capability
+grant binding the granting Self, the grantee Self, and the exact protected
+Artifact.
+
+> **Settlement of the transmission is irreversible; revocation of the
+> capability is prospective.**
+
+- **Cancellation of a Key Placement before settlement means the capability
+  never existed; it is not revocation.** No grant is written.
+- **A Key Placement never contributes to recipient-ground artifact access;
+  the sole revocable read path is the capability register.** A settled Key
+  Placement produces exactly one authorization effect — the active capability
+  grant — and revocation of that capability cannot be defeated by the
+  Placement that transmitted it.
+- A Key Placement addresses **exactly one** recipient (the grantee); the
+  sender may not be its own Key recipient. This is a Key-payload narrowing of
+  the general recipient law (§3.7), not a repeal of it.
 
 ## 6. CONSTITUTIONAL TESTS — apply during review
 
@@ -261,3 +283,11 @@ correspondence — is already ratified into the Correspondences view (§7).
 *Ratified rulings of 2026-07-14: settlement law (§5); constitutional tests
 1–3 (§6); view inventory collapse to five routes (§7); demotions and open
 questions 6–10 (§11). Recorded by Claude as auditor, ruled by Liberty.*
+
+*Ratified rulings of 2026-07-24 (P7-A, Key lifecycle): Key issuance is a
+Placement carrying a capability payload (§5 Key transmission); settlement is
+irreversible and revocation is prospective; a Key Placement never contributes
+to recipient-ground artifact access; a Key Placement addresses exactly one
+recipient and never the sender. Design recorded in
+[docs/decisions/0007](docs/decisions/0007-key-lifecycle.md). Ruled by Liberty,
+recorded by Claude as engineer.*

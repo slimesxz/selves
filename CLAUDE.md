@@ -19,4 +19,7 @@ Ratified riders on the playbook:
 - firebase.json at root exists solely to keep legacy/ deployable.
 
 Playbook Phase 0 and Phase 0.5 (client compliance strip) are closed.
-Currently authorized: nothing. Await explicit P1 authorization.
+Playbook Phases P1–P6 are complete and ratified (decision records
+0001–0006). Phase 7 (Key lifecycle) is authorized through P7-E under
+decision record 0007; work stops after P7-E and awaits chamber audit. No
+phase beyond P7-E is authorized.
