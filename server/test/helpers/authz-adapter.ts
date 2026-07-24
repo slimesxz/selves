@@ -108,6 +108,25 @@ export async function buildAuthzAdapter(opts: {
     runVoid(reply, () => service.settlePlacement(actor(req), idOf(req))),
   );
 
+  // ── Phase-7 Key lifecycle: self-scoped (acting grantor) ───────────────────
+  // Opening a Key transmission (a draft Placement over a protected Artifact) and
+  // revoking a capability. add_recipient / departure / settlement reuse the
+  // existing placement routes above — they are Key-aware in the DEFINER functions.
+  app.post('/__authz__/key-placement', selfScoped, async (req, reply) => {
+    const b = req.body as { protectedResourceId?: unknown } | undefined;
+    if (typeof b?.protectedResourceId !== 'string') return reply.code(400).send({ error: 'bad_request' });
+    return runId(reply, () => service.createKeyPlacementDraft(actor(req), b.protectedResourceId as string));
+  });
+  app.post('/__authz__/key/revocation', selfScoped, async (req, reply) => {
+    const b = req.body as { granteeSelfId?: unknown; protectedResourceId?: unknown } | undefined;
+    if (typeof b?.granteeSelfId !== 'string' || typeof b?.protectedResourceId !== 'string') {
+      return reply.code(400).send({ error: 'bad_request' });
+    }
+    return runVoid(reply, () =>
+      service.revokeKey(actor(req), b.granteeSelfId as string, b.protectedResourceId as string),
+    );
+  });
+
   // ── Phase-6 mutation: one account-bound (authenticate only) ───────────────
   // Authority is the authenticated account (req.account). No acting Self is
   // required, inspected, or resolved; the account is never taken from the body.
