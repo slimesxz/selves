@@ -41,7 +41,10 @@ export interface Artifact {
 export interface Placement {
   id: PlacementId;
   senderSelfId: SelfId;
-  artifactId: ArtifactId;
+  // Null for a Key Placement, which carries a capability payload over a protected
+  // resource rather than a content Artifact (decision 0007, R2). Non-null for the
+  // text payload.
+  artifactId: ArtifactId | null;
   state: PlacementState;
   createdAt: Date;
   departingAt: Date | null;

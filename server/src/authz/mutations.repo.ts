@@ -36,6 +36,12 @@ export interface MutationsRepo {
    *  authenticated account id, NOT the acting Self (the interval is an account
    *  setting). No acting Self is accepted or resolved here. */
   setDepartureInterval(db: Queryable, accountId: string, seconds: number): Promise<void>;
+  /** Open a Key transmission: a draft Placement carrying the 'key' payload over
+   *  the exact protected Artifact (acting Self must author it). Returns its id. */
+  createKeyPlacementDraft(db: Queryable, actingSelf: string, protectedResourceId: string): Promise<string>;
+  /** Prospectively revoke the capability addressed by (grantee, protected
+   *  resource) under the acting grantor. Idempotent; never exposes key_grants.id. */
+  revokeKey(db: Queryable, actingSelf: string, granteeSelf: string, protectedResourceId: string): Promise<void>;
 }
 
 export function createMutationsRepo(): MutationsRepo {
@@ -78,6 +84,18 @@ export function createMutationsRepo(): MutationsRepo {
 
     async setDepartureInterval(db, accountId, seconds) {
       await db.query('SELECT domain.set_departure_interval($1, $2)', [accountId, seconds]);
+    },
+
+    async createKeyPlacementDraft(db, actingSelf, protectedResourceId) {
+      const { rows } = await db.query<{ id: string }>(
+        'SELECT domain.create_key_placement_draft($1, $2) AS id',
+        [actingSelf, protectedResourceId],
+      );
+      return rows[0]!.id;
+    },
+
+    async revokeKey(db, actingSelf, granteeSelf, protectedResourceId) {
+      await db.query('SELECT domain.revoke_key($1, $2, $3)', [actingSelf, granteeSelf, protectedResourceId]);
     },
   };
 }

@@ -65,6 +65,14 @@ export interface AuthorizationService {
   settlePlacement(ctx: ActingContext, placementId: string): Promise<void>;
   // Account-scoped (NOT acting-Self-bound): authority is the authenticated account.
   setDepartureInterval(ctx: AccountContext, seconds: number): Promise<void>;
+
+  // ── Phase-7 Key lifecycle (decision 0007) ───────────────────────────────────
+  // A Key is a capability payload carried by a Placement (Q1 Alt A). Opening a Key
+  // transmission is a draft Placement over the exact protected Artifact; the grant
+  // itself is produced by the Key-aware settle_placement, not here. Revocation is a
+  // standalone prospective mutation addressed by (grantee, protected resource).
+  createKeyPlacementDraft(ctx: ActingContext, protectedResourceId: string): Promise<string>;
+  revokeKey(ctx: ActingContext, granteeSelf: string, protectedResourceId: string): Promise<void>;
 }
 
 // ── pure decision functions (no I/O; exported for direct unit testing) ────────
@@ -208,6 +216,17 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
     // context (AccountContext), never from an acting Self.
     setDepartureInterval(ctx, seconds) {
       return mutations.setDepartureInterval(db, ctx.account, seconds);
+    },
+
+    // ── Key lifecycle: bound to the verified acting Self (the grantor). Issuance
+    // authority is authorship (checked inside create_key_placement_draft);
+    // revocation authority is the grant's recorded grantor (checked inside
+    // revoke_key). Failures propagate with the function's SQLSTATE for the adapter.
+    createKeyPlacementDraft(ctx, protectedResourceId) {
+      return mutations.createKeyPlacementDraft(db, ctx.actingSelf, protectedResourceId);
+    },
+    revokeKey(ctx, granteeSelf, protectedResourceId) {
+      return mutations.revokeKey(db, ctx.actingSelf, granteeSelf, protectedResourceId);
     },
   };
 }

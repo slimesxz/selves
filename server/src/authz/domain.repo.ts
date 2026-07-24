@@ -41,7 +41,7 @@ type ArtifactRow = {
 type PlacementRow = {
   id: string;
   sender_self_id: string;
-  artifact_id: string;
+  artifact_id: string | null; // null for a Key Placement (decision 0007, R2)
   state: string;
   created_at: Date;
   departing_at: Date | null;
@@ -67,7 +67,7 @@ function toPlacement(r: PlacementRow): Placement {
   return {
     id: r.id as PlacementId,
     senderSelfId: r.sender_self_id as SelfId,
-    artifactId: r.artifact_id as ArtifactId,
+    artifactId: r.artifact_id === null ? null : (r.artifact_id as ArtifactId),
     state: r.state as PlacementState,
     createdAt: r.created_at,
     departingAt: r.departing_at,
