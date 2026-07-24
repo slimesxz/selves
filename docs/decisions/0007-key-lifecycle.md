@@ -195,3 +195,76 @@ DML, and `id` / `grantor_self_id` / `granted_at` remain withheld (42501).
 (`create_key_placement_draft`, key-aware `add_recipient`/`begin_departure`/
 `settle_placement`, `revoke_key`) + service/repo surface · `P7-D` test-adapter
 routes · `P7-E` Phase-7 test suite + full regression.
+
+## Audit-phase amendment (P7-F, ruled by Liberty 2026-07-24)
+
+These entries are **additive**. They record the chamber's acceptance of the P7-E
+mechanical audit and the observations made during it. No historical ruling,
+implementation, schema, test, AGENTS.md, CLAUDE.md, or earlier decision-record
+text is revised; this is a completion record appended after gate closure.
+
+### Commit sequence (verified linear atop 716c95d)
+
+| Commit | Hash |
+|---|---|
+| P7-A — constitution (§5), decision 0007, CLAUDE.md correction | `f9b0e01` |
+| P7-B — migration: placement Key-payload shape | `65bfef9` |
+| P7-C — Key mutations + service/repo surface | `2b788c3` |
+| P7-D — test-adapter routes | `e9ed910` |
+| P7-E — Phase-7 test suite + full regression | `f31cc33` |
+
+### Audit outcome (accepted)
+
+- **Tests:** 237/237 green across 31 files. 211 baseline behavioral guarantees
+  preserved; **zero baseline test files modified**; **26 additive** Phase-7 tests;
+  **zero exactness-assertion amendments required** (the amend-to-conform allowance
+  under 0006-F A2 went unused). `tsc --noEmit` clean.
+- **Working tree** was clean at the P7-E audit boundary.
+
+### Five frozen audit findings — accepted on concrete evidence
+
+1. **Constitution precedes code.** P7-A (`f9b0e01`) precedes the P7-B schema
+   commit and all implementation. AGENTS.md §5 carries the governing sentence,
+   Corollary 1, and the N2 invariant verbatim.
+2. **Settlement atomicity (natural-fault mechanism).** The injected failure is
+   the **natural `23505` active-grant constraint refusal**, not a synthetic crash.
+   It occurs **after** the Placement state UPDATE executes; because the
+   transaction then fails and the Placement remains `departing` (with no new
+   grant), the state transition and the capability insertion are proven to share
+   **one** database transaction — a split-transaction implementation would have
+   left the Placement `settled`. Accepted as an accurate atomicity proof.
+3. **R3 structural.** `predicates.repo.ts` is byte-identical to 716c95d (sha256
+   `d956095e…1d5a`); the settled read decides on `KEY_VALID` and revocation
+   removes it though the settled Placement and recipient row persist.
+4. **No `key_grants` privilege widening.** Live `selves_app` probes return `42501`
+   for `id`, `grantor_self_id`, `granted_at`, `SELECT *`, and INSERT.
+5. **Revocation lookup correctness**, including the defect-negative below.
+
+### Recorded observations
+
+- **AP2 natural-fault mechanism** (per §above): the atomicity guarantee is
+  evidenced by a real constraint refusal after the state transition, not a
+  synthetic fault.
+- **Privilege delta came in UNDER the authorized budget.** The chamber permitted
+  new Placement column visibility under R2/R12 *if necessary*; implementation
+  required **none**. The **actual** privilege delta is: `EXECUTE` on the two new
+  DEFINER functions only, and **no new column grant on any table**. The withheld
+  `key_grants` surface (`id`, `grantor_self_id`, `granted_at`) remains intact.
+- **Regression:** all 211 baseline guarantees green with zero baseline test-file
+  modifications; the amend-to-conform allowance was unused.
+- **Revocation defect-negative (authorship-substitution absent).** In the
+  deliberately seeded, otherwise-unissuable state where the recorded grantor and
+  the current Artifact author differ, the **current author receives PT404** while
+  the **recorded grantor succeeds** — proving revocation authority binds to
+  recorded grantorship, and the rejected authorship-substitution defect is absent.
+- **Quarantine intact:** no expiration/timed Keys, transfer, delegation, reuse
+  limits, rotation, Key gifting, marketplace/value mechanics, capability-register
+  listing, Phase-8 RLS, or Phase-9 outbox entered the implementation; no Phase-4
+  session/credential lifecycle semantics were imported into the Key lifecycle.
+
+### Integration
+
+Phase 7 was constructed on `phase-7-key-lifecycle` (accepted as a procedural
+choice) and integrated into `master` by `git merge --ff-only` — a linear
+fast-forward, no merge/rebase/squash/rewrite — then published to `origin/master`.
+P7-F (this amendment) is the head of the integrated sequence.
