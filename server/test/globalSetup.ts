@@ -26,6 +26,7 @@ export default async function setup(): Promise<void> {
   await su.connect();
   await su.query('DROP SCHEMA IF EXISTS auth CASCADE');            // auth references public.accounts
   await su.query('DROP SCHEMA IF EXISTS domain CASCADE');          // domain.* DEFINER write surface (P6)
+  await su.query('DROP SCHEMA IF EXISTS proj CASCADE');            // proj.* projection surface (P9)
   await su.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
   await su.query('ALTER SCHEMA public OWNER TO selves_owner');     // recreate resets owner to superuser
   await su.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
