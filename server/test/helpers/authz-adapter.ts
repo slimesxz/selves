@@ -35,7 +35,7 @@ export async function buildAuthzAdapter(opts: {
   app.decorateRequest('actingSelf', null);
 
   const authenticate = makeAuthenticate(db, config);
-  const verify = makeVerifyActingSelf(db);
+  const verify = makeVerifyActingSelf(db, config);
   const selfScoped = { preHandler: [authenticate, verify] };
   const accountScoped = { preHandler: [authenticate] };
 

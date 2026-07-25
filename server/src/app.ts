@@ -80,19 +80,24 @@ export function makeAuthenticate(db: Queryable, config: AppConfig) {
 
 /** Per-route preHandler for Self-scoped routes. Validates the X-Acting-Self
  *  assertion and verifies ownership against the authoritative store on EVERY
- *  request (never cached). Must run after authenticate. */
-export function makeVerifyActingSelf(db: Queryable) {
+ *  request (never cached). Must run after authenticate.
+ *
+ *  P8 K / 8-B b1: ownership is checked against the account of THIS session — the
+ *  session token hash is passed to the owner-run DEFINER function, which resolves
+ *  the account in-DB (no caller-supplied account). */
+export function makeVerifyActingSelf(db: Queryable, config: AppConfig) {
   return async function verifyActingSelf(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     const raw = req.headers['x-acting-self'];
     if (typeof raw !== 'string' || !UUID_RE.test(raw)) {
       await reply.code(400).send({ error: 'self_context_required' });
       return;
     }
-    if (!req.account) {
+    const token = req.cookies[config.cookieName];
+    if (!req.account || !token) {
       await reply.code(401).send({ error: 'unauthenticated' });
       return;
     }
-    const owned = await selfOwnedByAccount(db, raw, req.account);
+    const owned = await selfOwnedByAccount(db, raw, sha256(token));
     if (!owned) {
       await reply.code(403).send({ error: 'forbidden' });
       return;
@@ -154,7 +159,9 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   // Account-scoped: requires authentication, but NO acting-Self context. Returns
   // only the caller's own Selves, deterministically ordered by slot (switcher).
   app.get('/auth/selves', { preHandler: authenticate }, async (req: FastifyRequest) => {
-    return listSelves(db, req.account as string);
+    // P8 K / 8-B b1: the switcher lists the SESSION account's Selves — the DEFINER
+    // function derives the account from the session token hash (no caller account).
+    return listSelves(db, sha256(req.cookies[config.cookieName] as string));
   });
 
   // Login (the exempt "login surface"): verify the enrollment secret, mint a

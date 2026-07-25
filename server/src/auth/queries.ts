@@ -41,17 +41,20 @@ export async function revokeSession(db: Queryable, tokenHash: Buffer): Promise<v
   await db.query('SELECT auth.revoke_session($1)', [tokenHash]);
 }
 
-/** Is this Self owned by this account? Checked against the authoritative store on
- *  every protected Self-scoped request — a prior success is never standing auth.
+/** Is this Self owned by the account of THIS session? Checked against the
+ *  authoritative store on every protected Self-scoped request — a prior success is
+ *  never standing auth.
  *
- *  P8 R7.2: the account→Self linkage (the sibling map) is no longer directly
- *  readable by selves_app. This resolves through an owner-run SECURITY DEFINER
- *  function taking the VERIFIED ACCOUNT as its first argument (never an acting
- *  Self); the app holds only EXECUTE on it (decision 0008 R7.2 / 0009). */
-export async function selfOwnedByAccount(db: Queryable, selfId: string, account: string): Promise<boolean> {
+ *  P8 K / 8-B b1 (decision 0008-C §4): the account authority derives from the
+ *  authenticated session, not from a caller-supplied account UUID. The owner-run
+ *  SECURITY DEFINER function resolves the account in-DB via
+ *  auth.authenticate_session(session token hash); an invalid/expired/revoked
+ *  session yields false (non-oracular). The token hash travels only as a bind
+ *  parameter. */
+export async function selfOwnedByAccount(db: Queryable, selfId: string, sessionTokenHash: Buffer): Promise<boolean> {
   const { rows } = await db.query<{ ok: boolean }>(
     'SELECT domain.self_owned_by_account($1, $2) AS ok',
-    [account, selfId],
+    [sessionTokenHash, selfId],
   );
   return rows[0]?.ok === true;
 }
@@ -62,16 +65,17 @@ export interface SelfSummary {
   slot: number;
 }
 
-/** The account's own Selves, deterministically ordered by slot. Supports the
- *  ratified Self switcher. Account-scoped: no acting-Self context required.
+/** The session account's own Selves, deterministically ordered by slot. Supports
+ *  the ratified Self switcher.
  *
- *  P8 R7.2: resolves through the owner-run SECURITY DEFINER function
- *  domain.list_account_selves (verified account as its argument); selves_app no
- *  longer reads public.selves directly (decision 0008 R7.2 / 0009). */
-export async function listSelves(db: Queryable, account: string): Promise<SelfSummary[]> {
+ *  P8 K / 8-B b1: resolves through the owner-run SECURITY DEFINER function
+ *  domain.list_account_selves, which derives the account from the authenticated
+ *  session token hash (no caller-supplied account); selves_app cannot read
+ *  public.selves directly (decision 0008-C §4). */
+export async function listSelves(db: Queryable, sessionTokenHash: Buffer): Promise<SelfSummary[]> {
   const { rows } = await db.query<{ id: string; name: string; self_slot: number }>(
     'SELECT id, name, self_slot FROM domain.list_account_selves($1)',
-    [account],
+    [sessionTokenHash],
   );
   return rows.map((r) => ({ id: r.id, name: r.name, slot: r.self_slot }));
 }

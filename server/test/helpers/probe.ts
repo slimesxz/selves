@@ -16,7 +16,7 @@ export interface Recorder {
 export async function buildAppWithProbe(opts: BuildOptions & { recorder?: Recorder }): Promise<FastifyInstance> {
   const app = await buildApp(opts);
   const authenticate = makeAuthenticate(opts.db, opts.config);
-  const verifyActingSelf = makeVerifyActingSelf(opts.db);
+  const verifyActingSelf = makeVerifyActingSelf(opts.db, opts.config);
   app.get(
     '/__test__/whoami',
     { preHandler: [authenticate, verifyActingSelf] },
