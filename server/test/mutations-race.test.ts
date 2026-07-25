@@ -1,7 +1,7 @@
 import './helpers/env';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { superuserPool } from './helpers/auth.ts';
+import { superuserPool, sha256, randomSecret } from './helpers/auth.ts';
 import { connect, race } from './helpers/race.ts';
 
 // P6-E — deterministic two-connection races on the placement state machine (no
@@ -35,16 +35,18 @@ afterEach(async () => {
   }
 });
 
-const CANCEL = 'SELECT domain.cancel_placement($1, $2)';
-const SETTLE = 'SELECT domain.settle_placement($1, $2)';
-const BEGIN = 'SELECT domain.begin_departure($1, $2)';
-const ADDREC = 'SELECT domain.add_recipient($1, $2, $3)';
+// P8 L: mutations are single-argument (acting Self from C3 context).
+const CANCEL = 'SELECT domain.cancel_placement($1)';
+const SETTLE = 'SELECT domain.settle_placement($1)';
+const BEGIN = 'SELECT domain.begin_departure($1)';
+const ADDREC = 'SELECT domain.add_recipient($1, $2)';
 
 interface Fixture {
   sender: string;
   recipient: string;
   sibling: string;
   placement: string;
+  token: Buffer; // a live session for the fixture account (authenticates the acting Self)
 }
 
 /** Create a sender/recipient/sibling + one placement (superuser), left in the
@@ -63,6 +65,8 @@ async function fixture(opts: { state: 'draft' | 'departing'; floorElapsed?: bool
   const sender = await mk(1, 'sender');
   const recipient = await mk(2, 'recipient');
   const sibling = await mk(3, 'sibling');
+  const token = sha256(randomSecret());
+  await su.query('INSERT INTO auth.sessions (account_id, token_hash) VALUES ($1, $2)', [account, token]);
   const artifact = (
     await su.query<{ id: string }>(
       "INSERT INTO public.artifacts (author_self_id, payload_type, text_body) VALUES ($1, 'text', 'x') RETURNING id",
@@ -90,7 +94,7 @@ async function fixture(opts: { state: 'draft' | 'departing'; floorElapsed?: bool
       [placement],
     );
   }
-  return { sender, recipient, sibling, placement };
+  return { sender, recipient, sibling, placement, token };
 }
 
 async function stateOf(placementId: string): Promise<string> {
@@ -101,8 +105,8 @@ describe('P6-E cancel-vs-settle — exactly one winner (both orderings)', () => 
   it('settle commits first -> the racing cancel sees settled and fails PT409', async () => {
     const f = await fixture({ state: 'departing', floorElapsed: true });
     const out = await race(
-      { client: appA, sql: SETTLE, params: [f.sender, f.placement] },
-      { client: appB, sql: CANCEL, params: [f.sender, f.placement] },
+      { client: appA, self: f.sender, token: f.token, sql: SETTLE, params: [f.placement] },
+      { client: appB, self: f.sender, token: f.token, sql: CANCEL, params: [f.placement] },
       probe,
     );
     expect(out.racer.errCode).toBe('PT409');
@@ -111,8 +115,8 @@ describe('P6-E cancel-vs-settle — exactly one winner (both orderings)', () => 
   it('cancel commits first -> the racing settle sees cancelled and fails PT409', async () => {
     const f = await fixture({ state: 'departing', floorElapsed: true });
     const out = await race(
-      { client: appA, sql: CANCEL, params: [f.sender, f.placement] },
-      { client: appB, sql: SETTLE, params: [f.sender, f.placement] },
+      { client: appA, self: f.sender, token: f.token, sql: CANCEL, params: [f.placement] },
+      { client: appB, self: f.sender, token: f.token, sql: SETTLE, params: [f.placement] },
       probe,
     );
     expect(out.racer.errCode).toBe('PT409');
@@ -124,8 +128,8 @@ describe('P6-E settle-vs-settle — idempotent, no duplicate effect', () => {
   it('the second settle is a no-op success; settled_at is the winner\'s and does not move', async () => {
     const f = await fixture({ state: 'departing', floorElapsed: true });
     const out = await race(
-      { client: appA, sql: SETTLE, params: [f.sender, f.placement] },
-      { client: appB, sql: SETTLE, params: [f.sender, f.placement] },
+      { client: appA, self: f.sender, token: f.token, sql: SETTLE, params: [f.placement] },
+      { client: appB, self: f.sender, token: f.token, sql: SETTLE, params: [f.placement] },
       probe,
     );
     expect(out.racer.errCode).toBeUndefined(); // idempotent
@@ -139,8 +143,8 @@ describe('P6-E begin-vs-cancel — begin is rejected on a non-draft placement', 
   it('cancel commits first -> the racing begin_departure sees cancelled and fails PT409', async () => {
     const f = await fixture({ state: 'departing' });
     const out = await race(
-      { client: appA, sql: CANCEL, params: [f.sender, f.placement] },
-      { client: appB, sql: BEGIN, params: [f.sender, f.placement] },
+      { client: appA, self: f.sender, token: f.token, sql: CANCEL, params: [f.placement] },
+      { client: appB, self: f.sender, token: f.token, sql: BEGIN, params: [f.placement] },
       probe,
     );
     expect(out.racer.errCode).toBe('PT409');
@@ -152,8 +156,8 @@ describe('P6-E addRecipient-vs-beginDeparture — the freeze boundary holds unde
   it('begin_departure commits first -> the racing addRecipient sees departing and fails PT409', async () => {
     const f = await fixture({ state: 'draft' });
     const out = await race(
-      { client: appA, sql: BEGIN, params: [f.sender, f.placement] },
-      { client: appB, sql: ADDREC, params: [f.sender, f.placement, f.sibling] },
+      { client: appA, self: f.sender, token: f.token, sql: BEGIN, params: [f.placement] },
+      { client: appB, self: f.sender, token: f.token, sql: ADDREC, params: [f.placement, f.sibling] },
       probe,
     );
     expect(out.racer.errCode).toBe('PT409');

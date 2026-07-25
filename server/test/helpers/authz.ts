@@ -8,7 +8,7 @@ import { createPredicatesRepo } from '../../src/authz/predicates.repo.ts';
 import { createDomainRepo } from '../../src/authz/domain.repo.ts';
 import { createMutationsRepo } from '../../src/authz/mutations.repo.ts';
 import type { DecisionSink, Outcome } from '../../src/authz/reasons.ts';
-import type { AccountId, SelfId } from '../../src/domain/ids.ts';
+import type { SelfId } from '../../src/domain/ids.ts';
 import type { PlacementState } from '../../src/domain/placement.ts';
 
 // Wires the REAL AuthorizationService over a selves_app connection (appTestPool),
@@ -96,9 +96,13 @@ export async function withEstablishedContext<R>(
   }
 }
 
-// Account-scoped context (the authenticated account), for set_departure_interval.
-export function accountCtx(accountId: string): AccountContext {
-  return { account: accountId as AccountId };
+// Account-scoped context for set_departure_interval (P8 L / 8-C §5: account
+// authority derives from the session, Self-independent). Resolves the account's
+// registered session token; the HTTP adapter passes the real cookie session.
+export function accountCtx(accountId: string, sessionToken?: Buffer): AccountContext {
+  const token = sessionToken ?? _sessionTokenByAccount.get(accountId);
+  if (!token) throw new Error(`no session registered for account ${accountId}`);
+  return { sessionToken: token };
 }
 
 /** A sink that records every decision, for reason/ground assertions. */

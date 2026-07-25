@@ -2,6 +2,7 @@ import './helpers/env';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { makeAuthz, actingCtx, accountCtx, newAccount, newSelf } from './helpers/authz.ts';
+import { sha256, randomSecret } from './helpers/auth.ts';
 import type { AuthorizationService } from '../src/authz/service.ts';
 
 // P6-E — domain mutation semantics proven through the REAL AuthorizationService
@@ -305,14 +306,19 @@ describe('idempotency (non-race)', () => {
   });
 });
 
-describe('set_departure_interval is account-scoped, never Self-resolved', () => {
-  it('a SELF id supplied where the account is expected does not resolve to an account (PT404)', async () => {
+describe('set_departure_interval is session-account-scoped, never Self-resolved (P8 L / 8-C §5)', () => {
+  it('derives the account from the session; a fabricated session sets nothing (PT404), and no Self can be aimed', async () => {
     const s = await scene();
-    // accountCtx wraps whatever id it is given; passing a Self id must NOT be
-    // resolved back to that Self's account — it is simply an unknown account.
-    expect(await code(() => service.setDepartureInterval(accountCtx(s.sender), 30))).toBe('PT404');
-    // the real account is untouched
-    const { rows } = await su.query('SELECT departure_interval_seconds d FROM public.accounts WHERE id = $1', [s.account]);
-    expect(rows[0].d).toBe(30); // still the default
+    // P8 L: there is no account/Self parameter to misuse — the account is derived
+    // from the session token. A fabricated (unissued) session resolves to no
+    // account → PT404, and nothing changes.
+    const fabricated = accountCtx(s.account, sha256(randomSecret()));
+    expect(await code(() => service.setDepartureInterval(fabricated, 30))).toBe('PT404');
+    const before = (await su.query('SELECT departure_interval_seconds d FROM public.accounts WHERE id = $1', [s.account])).rows[0].d;
+    expect(before).toBe(30); // still the default — untouched by the fabricated session
+
+    // the session's OWN account is what gets set (Self-independent, account-authenticated)
+    await service.setDepartureInterval(accountCtx(s.account), 10);
+    expect((await su.query('SELECT departure_interval_seconds d FROM public.accounts WHERE id = $1', [s.account])).rows[0].d).toBe(10);
   });
 });

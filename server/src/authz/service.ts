@@ -37,12 +37,12 @@ export interface ActingContext {
 
 // Account-scoped context for the one operation whose authority is the AUTHENTICATED
 // ACCOUNT, not an acting Self: the departure interval is an account-level setting
-// (decision 0006, ruling 3). The account id comes from the same verified
-// authentication context the auth subsystem uses (req.account); it is never
-// derived by resolving the acting-Self header back to an account, and never read
-// from the request body.
+// (decision 0006, ruling 3). P8 L / 8-C §5: it is account-authenticated and
+// Self-INDEPENDENT, so it is bound to the SESSION (the DEFINER function derives the
+// account from the session token), never to an acting Self and never to a
+// caller-supplied account id.
 export interface AccountContext {
-  readonly account: AccountId;
+  readonly sessionToken: Buffer;
 }
 
 // A single-resource read result. On deny, the caller receives an opaque
@@ -218,45 +218,74 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
       });
     },
 
-    // ── mutations: each binds the write to the verified acting Self and delegates
-    // to one DEFINER function. Failures propagate with the function's SQLSTATE for
-    // the route adapter to map; authorization is enforced inside the function.
+    // ── mutations (P8 L / Scope B): each acting-Self mutation runs in ONE READ
+    // COMMITTED transaction that FIRST establishes C3 context, then invokes the
+    // DEFINER function — which derives its acting Self from current_acting_self(),
+    // never from a caller-supplied argument. The DEFINER function remains the
+    // exclusive authoritative write boundary; C3 does not authorize direct DML.
     createArtifact(ctx, textBody) {
-      return mutations.createArtifact(db, ctx.actingSelf, textBody);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.createArtifact(tx, textBody);
+      });
     },
     createPlacementDraft(ctx, artifactId) {
-      return mutations.createPlacementDraft(db, ctx.actingSelf, artifactId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.createPlacementDraft(tx, artifactId);
+      });
     },
     addRecipient(ctx, placementId, recipientSelf) {
-      return mutations.addRecipient(db, ctx.actingSelf, placementId, recipientSelf);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.addRecipient(tx, placementId, recipientSelf);
+      });
     },
     removeRecipient(ctx, placementId, recipientSelf) {
-      return mutations.removeRecipient(db, ctx.actingSelf, placementId, recipientSelf);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.removeRecipient(tx, placementId, recipientSelf);
+      });
     },
     beginDeparture(ctx, placementId) {
-      return mutations.beginDeparture(db, ctx.actingSelf, placementId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.beginDeparture(tx, placementId);
+      });
     },
     cancelPlacement(ctx, placementId) {
-      return mutations.cancelPlacement(db, ctx.actingSelf, placementId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.cancelPlacement(tx, placementId);
+      });
     },
     settlePlacement(ctx, placementId) {
-      return mutations.settlePlacement(db, ctx.actingSelf, placementId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.settlePlacement(tx, placementId);
+      });
     },
-    // Account-scoped: the account id comes from the verified authentication
-    // context (AccountContext), never from an acting Self.
+    // Account-scoped and Self-INDEPENDENT (P8 L / 8-C §5): a single autocommit
+    // statement carrying the session token; the DEFINER function derives the
+    // account from the session. No acting-Self context is established.
     setDepartureInterval(ctx, seconds) {
-      return mutations.setDepartureInterval(db, ctx.account, seconds);
+      return mutations.setDepartureInterval(db, ctx.sessionToken, seconds);
     },
 
-    // ── Key lifecycle: bound to the verified acting Self (the grantor). Issuance
-    // authority is authorship (checked inside create_key_placement_draft);
-    // revocation authority is the grant's recorded grantor (checked inside
-    // revoke_key). Failures propagate with the function's SQLSTATE for the adapter.
+    // ── Key lifecycle: acting Self (the grantor) comes from C3 context, not an
+    // argument. Issuance authority is authorship; revocation authority is the
+    // grant's recorded grantor — both checked inside the DEFINER function.
     createKeyPlacementDraft(ctx, protectedResourceId) {
-      return mutations.createKeyPlacementDraft(db, ctx.actingSelf, protectedResourceId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.createKeyPlacementDraft(tx, protectedResourceId);
+      });
     },
     revokeKey(ctx, granteeSelf, protectedResourceId) {
-      return mutations.revokeKey(db, ctx.actingSelf, granteeSelf, protectedResourceId);
+      return txPool.withTransaction(async (tx) => {
+        await establishContext(tx, ctx);
+        return mutations.revokeKey(tx, granteeSelf, protectedResourceId);
+      });
     },
   };
 }

@@ -1,7 +1,7 @@
 import './helpers/env';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { superuserPool } from './helpers/auth.ts';
+import { superuserPool, sha256, randomSecret } from './helpers/auth.ts';
 import { connect, race } from './helpers/race.ts';
 
 // P7-E — deterministic two-connection races on the Key lifecycle (no timing
@@ -28,17 +28,20 @@ afterEach(async () => {
   }
 });
 
-const SETTLE = 'SELECT domain.settle_placement($1, $2)';
-const REVOKE = 'SELECT domain.revoke_key($1, $2, $3)';
+// P8 L: mutations are single-argument (acting Self from C3 context).
+const SETTLE = 'SELECT domain.settle_placement($1)';
+const REVOKE = 'SELECT domain.revoke_key($1, $2)';
 
-async function mkTriple(): Promise<{ grantor: string; grantee: string; resource: string }> {
+async function mkTriple(): Promise<{ grantor: string; grantee: string; resource: string; token: Buffer }> {
   const account = (await su.query<{ id: string }>('INSERT INTO public.accounts DEFAULT VALUES RETURNING id')).rows[0]!.id;
   const mk = async (slot: number, name: string) =>
     (await su.query<{ id: string }>('INSERT INTO public.selves (account_id, self_slot, name) VALUES ($1,$2,$3) RETURNING id', [account, slot, name])).rows[0]!.id;
   const grantor = await mk(1, 'grantor');
   const grantee = await mk(2, 'grantee');
   const resource = (await su.query<{ id: string }>("INSERT INTO public.artifacts (author_self_id, payload_type, text_body) VALUES ($1,'text','x') RETURNING id", [grantor])).rows[0]!.id;
-  return { grantor, grantee, resource };
+  const token = sha256(randomSecret());
+  await su.query('INSERT INTO auth.sessions (account_id, token_hash) VALUES ($1, $2)', [account, token]);
+  return { grantor, grantee, resource, token };
 }
 
 /** A departing Key Placement for (grantor→grantee over resource), floor elapsed. */
@@ -68,8 +71,8 @@ describe('P7-E settlement collision — two Key Placements, exactly one grant (R
     const kp1 = await departingKeyPlacement(t.grantor, t.grantee, t.resource);
     const kp2 = await departingKeyPlacement(t.grantor, t.grantee, t.resource);
     const out = await race(
-      { client: appA, sql: SETTLE, params: [t.grantor, kp1] },
-      { client: appB, sql: SETTLE, params: [t.grantor, kp2] },
+      { client: appA, self: t.grantor, token: t.token, sql: SETTLE, params: [kp1] },
+      { client: appB, self: t.grantor, token: t.token, sql: SETTLE, params: [kp2] },
       probe,
     );
     expect(out.racer.errCode).toBe('23505'); // maps to 409 (proven in key-lifecycle)
@@ -84,8 +87,8 @@ describe('P7-E revoke vs revoke — idempotent, one-winner (audit point 5)', () 
     const t = await mkTriple();
     await su.query('INSERT INTO public.key_grants (grantor_self_id, grantee_self_id, protected_resource_id) VALUES ($1,$2,$3)', [t.grantor, t.grantee, t.resource]);
     const out = await race(
-      { client: appA, sql: REVOKE, params: [t.grantor, t.grantee, t.resource] },
-      { client: appB, sql: REVOKE, params: [t.grantor, t.grantee, t.resource] },
+      { client: appA, self: t.grantor, token: t.token, sql: REVOKE, params: [t.grantee, t.resource] },
+      { client: appB, self: t.grantor, token: t.token, sql: REVOKE, params: [t.grantee, t.resource] },
       probe,
     );
     expect(out.racer.errCode).toBeUndefined(); // idempotent success, not an error

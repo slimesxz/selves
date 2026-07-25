@@ -62,6 +62,7 @@ const throwingTx: Tx = {
 };
 const fakeTxPool: TxPool = {
   withRepeatableRead: (fn) => fn(throwingTx),
+  withTransaction: (fn) => fn(throwingTx), // P8 L: interface shape; unused on the read-only failure path
 };
 // This suite exercises only the read decision path; the write dependencies must
 // never be touched here, so they throw if used.

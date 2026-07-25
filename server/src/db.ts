@@ -30,29 +30,41 @@ export type Tx = Queryable;
 // pool is turned into a transaction; it lives in the db-access layer so the
 // isolation level is not restated per call site.
 export interface TxPool {
+  /** One request-local REPEATABLE READ transaction on a single connection — for
+   *  the read path (Stage-1 predicate reads + Stage-3 protected read share one
+   *  snapshot). The caller establishes C3 context as the first statement. */
   withRepeatableRead<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
+  /** One request-local READ COMMITTED transaction on a single connection — for the
+   *  mutation path (P8 L). READ COMMITTED (not REPEATABLE READ) so the DEFINER
+   *  functions' SELECT ... FOR UPDATE block-and-re-read rather than raise a
+   *  serialization error. The caller establishes C3 context as the first statement,
+   *  so the mutation derives its acting Self from authenticated context on the same
+   *  backend and transaction. */
+  withTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
 }
 
 export function appTxPool(pool: pg.Pool): TxPool {
-  return {
-    async withRepeatableRead(fn) {
-      const client = await pool.connect();
+  const run = async <T>(begin: string, fn: (tx: Tx) => Promise<T>): Promise<T> => {
+    const client = await pool.connect();
+    try {
+      await client.query(begin);
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
       try {
-        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
-        const result = await fn(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
-        try {
-          await client.query('ROLLBACK');
-        } catch {
-          // A failed ROLLBACK (e.g. a dead connection) must not mask the
-          // original error; the client is discarded on release below.
-        }
-        throw err;
-      } finally {
-        client.release();
+        await client.query('ROLLBACK');
+      } catch {
+        // A failed ROLLBACK (e.g. a dead connection) must not mask the
+        // original error; the client is discarded on release below.
       }
-    },
+      throw err;
+    } finally {
+      client.release();
+    }
+  };
+  return {
+    withRepeatableRead: (fn) => run('BEGIN ISOLATION LEVEL REPEATABLE READ', fn),
+    withTransaction: (fn) => run('BEGIN', fn),
   };
 }

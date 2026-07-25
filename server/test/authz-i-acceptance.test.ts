@@ -234,21 +234,25 @@ describe('P8 I — credential-propagation leak audit', () => {
   const SRC = resolve(here, '../src');
   const read = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');
 
-  it('service.ts carries sessionToken ONLY as a bind parameter to the setter (no interpolation)', () => {
+  it('service.ts carries sessionToken ONLY as bind parameters (no interpolation)', () => {
     const src = read('authz/service.ts');
-    // the sole property access of the credential-bearing field is in establishContext,
-    // passed as a bind parameter — never interpolated into SQL text.
+    // establishContext passes it as a bind parameter to the C3 setter (reads +
+    // the nine acting-Self mutations) …
     expect(src).toContain("tx.query('SELECT domain.set_acting_self($1, $2)', [ctx.sessionToken, ctx.actingSelf])");
-    const accesses = [...src.matchAll(/\.sessionToken\b/g)].length;
-    expect(accesses, 'exactly one sessionToken access site (establishContext)').toBe(1);
+    // … and set_departure_interval passes it as a bind parameter to the account mutation.
+    expect(src).toContain('mutations.setDepartureInterval(db, ctx.sessionToken, seconds)');
+    // Both value-uses of ctx.sessionToken are those bind-parameter passes — never interpolated.
+    const valueUses = [...src.matchAll(/ctx\.sessionToken\b/g)].length;
+    expect(valueUses, 'ctx.sessionToken used only at the two bind-parameter sites').toBe(2);
     expect(/\$\{[^}]*sessionToken[^}]*\}/.test(src), 'sessionToken never interpolated into a template').toBe(false);
   });
 
-  it('no logger/error/serialization path in the read pipeline references the credential field', () => {
-    for (const rel of ['authz/service.ts', 'db.ts', 'authz/domain.repo.ts']) {
+  it('no logger/error/serialization path in the read or mutation pipeline references the credential field', () => {
+    for (const rel of ['authz/service.ts', 'db.ts', 'authz/domain.repo.ts', 'authz/mutations.repo.ts']) {
       const src = read(rel);
       expect(/log\.[a-z]+\([^)]*sessionToken/i.test(src), `${rel}: sessionToken never logged`).toBe(false);
       expect(/JSON\.stringify\([^)]*sessionToken/i.test(src), `${rel}: sessionToken never serialized`).toBe(false);
+      expect(/\$\{[^}]*(sessionToken|Token)[^}]*\}/.test(src), `${rel}: no token interpolation`).toBe(false);
     }
   });
 

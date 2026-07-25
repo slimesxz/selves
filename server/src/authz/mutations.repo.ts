@@ -4,98 +4,89 @@
 // authz/service.ts (enforced by the import-graph test) — so no handler can issue
 // a mutation around an authorization decision.
 //
-// A DEFINER function is a single autocommit statement that does its own
-// state-machine locking (SELECT ... FOR UPDATE on the stable placement row), so
-// mutations run on the plain Queryable (the app pool), NOT the REPEATABLE READ
-// TxPool used for reads, and NOT the raw pool binding. That keeps the Phase-5
-// mechanical-boundary positive locks (pg / raw-pool importers) unchanged.
+// P8 L (Scope B / 8-C §5): the acting Self is NO LONGER a caller-supplied argument.
+// Each acting-Self mutation runs inside a READ COMMITTED transaction (the Tx handed
+// in) in which the service has already established C3 context; the DEFINER function
+// derives its acting Self from current_acting_self(). set_departure_interval is
+// account-authenticated and Self-independent, so it carries the session token hash
+// (the DEFINER function resolves the account) and runs as a single autocommit
+// statement on the plain Queryable.
 //
-// These methods do not classify failures: the function's SQLSTATE (PT404 / PT409
-// / PT400, or a structural 23xxx) propagates unchanged so the route adapter can
-// apply the ratified split mapping (reasons.mapMutationError). Authorization is
-// bound to the acting Self the service was handed from the verified Phase-4
-// context; the function binds every write to it.
+// These methods do not classify failures: the function's SQLSTATE (PT404 / PT409 /
+// PT400 / 28000, or a structural 23xxx) propagates unchanged so the route adapter
+// can apply the ratified split mapping (reasons.mapMutationError).
 import type { Queryable } from '../db.ts';
 
 export interface MutationsRepo {
-  /** Create a text Artifact authored by the acting Self. Returns its id. */
-  createArtifact(db: Queryable, actingSelf: string, textBody: string): Promise<string>;
-  /** Create a draft Placement (sender = acting Self = Artifact author). Returns id. */
-  createPlacementDraft(db: Queryable, actingSelf: string, artifactId: string): Promise<string>;
+  /** Create a text Artifact authored by the C3 acting Self. Returns its id. */
+  createArtifact(q: Queryable, textBody: string): Promise<string>;
+  /** Create a draft Placement (sender = C3 acting Self = Artifact author). Returns id. */
+  createPlacementDraft(q: Queryable, artifactId: string): Promise<string>;
   /** Add an explicit recipient while draft (idempotent). */
-  addRecipient(db: Queryable, actingSelf: string, placementId: string, recipientSelf: string): Promise<void>;
+  addRecipient(q: Queryable, placementId: string, recipientSelf: string): Promise<void>;
   /** Remove an explicit recipient while draft (idempotent). */
-  removeRecipient(db: Queryable, actingSelf: string, placementId: string, recipientSelf: string): Promise<void>;
+  removeRecipient(q: Queryable, placementId: string, recipientSelf: string): Promise<void>;
   /** draft -> departing: requires >=1 recipient; snapshots the account interval. */
-  beginDeparture(db: Queryable, actingSelf: string, placementId: string): Promise<void>;
+  beginDeparture(q: Queryable, placementId: string): Promise<void>;
   /** departing -> cancelled (idempotent on already-cancelled). */
-  cancelPlacement(db: Queryable, actingSelf: string, placementId: string): Promise<void>;
+  cancelPlacement(q: Queryable, placementId: string): Promise<void>;
   /** departing -> settled behind the server-enforced interval floor (idempotent). */
-  settlePlacement(db: Queryable, actingSelf: string, placementId: string): Promise<void>;
-  /** Set the ACCOUNT-level departure interval. Account-scoped: authority is the
-   *  authenticated account id, NOT the acting Self (the interval is an account
-   *  setting). No acting Self is accepted or resolved here. */
-  setDepartureInterval(db: Queryable, accountId: string, seconds: number): Promise<void>;
-  /** Open a Key transmission: a draft Placement carrying the 'key' payload over
-   *  the exact protected Artifact (acting Self must author it). Returns its id. */
-  createKeyPlacementDraft(db: Queryable, actingSelf: string, protectedResourceId: string): Promise<string>;
-  /** Prospectively revoke the capability addressed by (grantee, protected
-   *  resource) under the acting grantor. Idempotent; never exposes key_grants.id. */
-  revokeKey(db: Queryable, actingSelf: string, granteeSelf: string, protectedResourceId: string): Promise<void>;
+  settlePlacement(q: Queryable, placementId: string): Promise<void>;
+  /** Set the ACCOUNT-level departure interval. Account-authenticated and
+   *  Self-independent: the DEFINER function derives the account from the session
+   *  token hash. No acting Self is involved. */
+  setDepartureInterval(q: Queryable, sessionTokenHash: Buffer, seconds: number): Promise<void>;
+  /** Open a Key transmission over the exact protected Artifact (C3 acting Self must
+   *  author it). Returns its id. */
+  createKeyPlacementDraft(q: Queryable, protectedResourceId: string): Promise<string>;
+  /** Prospectively revoke the capability addressed by (grantee, protected resource)
+   *  under the C3 acting grantor. Idempotent; never exposes key_grants.id. */
+  revokeKey(q: Queryable, granteeSelf: string, protectedResourceId: string): Promise<void>;
 }
 
 export function createMutationsRepo(): MutationsRepo {
   return {
-    async createArtifact(db, actingSelf, textBody) {
-      const { rows } = await db.query<{ id: string }>(
-        'SELECT domain.create_artifact($1, $2) AS id',
-        [actingSelf, textBody],
-      );
+    async createArtifact(q, textBody) {
+      const { rows } = await q.query<{ id: string }>('SELECT domain.create_artifact($1) AS id', [textBody]);
       return rows[0]!.id;
     },
 
-    async createPlacementDraft(db, actingSelf, artifactId) {
-      const { rows } = await db.query<{ id: string }>(
-        'SELECT domain.create_placement_draft($1, $2) AS id',
-        [actingSelf, artifactId],
-      );
+    async createPlacementDraft(q, artifactId) {
+      const { rows } = await q.query<{ id: string }>('SELECT domain.create_placement_draft($1) AS id', [artifactId]);
       return rows[0]!.id;
     },
 
-    async addRecipient(db, actingSelf, placementId, recipientSelf) {
-      await db.query('SELECT domain.add_recipient($1, $2, $3)', [actingSelf, placementId, recipientSelf]);
+    async addRecipient(q, placementId, recipientSelf) {
+      await q.query('SELECT domain.add_recipient($1, $2)', [placementId, recipientSelf]);
     },
 
-    async removeRecipient(db, actingSelf, placementId, recipientSelf) {
-      await db.query('SELECT domain.remove_recipient($1, $2, $3)', [actingSelf, placementId, recipientSelf]);
+    async removeRecipient(q, placementId, recipientSelf) {
+      await q.query('SELECT domain.remove_recipient($1, $2)', [placementId, recipientSelf]);
     },
 
-    async beginDeparture(db, actingSelf, placementId) {
-      await db.query('SELECT domain.begin_departure($1, $2)', [actingSelf, placementId]);
+    async beginDeparture(q, placementId) {
+      await q.query('SELECT domain.begin_departure($1)', [placementId]);
     },
 
-    async cancelPlacement(db, actingSelf, placementId) {
-      await db.query('SELECT domain.cancel_placement($1, $2)', [actingSelf, placementId]);
+    async cancelPlacement(q, placementId) {
+      await q.query('SELECT domain.cancel_placement($1)', [placementId]);
     },
 
-    async settlePlacement(db, actingSelf, placementId) {
-      await db.query('SELECT domain.settle_placement($1, $2)', [actingSelf, placementId]);
+    async settlePlacement(q, placementId) {
+      await q.query('SELECT domain.settle_placement($1)', [placementId]);
     },
 
-    async setDepartureInterval(db, accountId, seconds) {
-      await db.query('SELECT domain.set_departure_interval($1, $2)', [accountId, seconds]);
+    async setDepartureInterval(q, sessionTokenHash, seconds) {
+      await q.query('SELECT domain.set_departure_interval($1, $2)', [sessionTokenHash, seconds]);
     },
 
-    async createKeyPlacementDraft(db, actingSelf, protectedResourceId) {
-      const { rows } = await db.query<{ id: string }>(
-        'SELECT domain.create_key_placement_draft($1, $2) AS id',
-        [actingSelf, protectedResourceId],
-      );
+    async createKeyPlacementDraft(q, protectedResourceId) {
+      const { rows } = await q.query<{ id: string }>('SELECT domain.create_key_placement_draft($1) AS id', [protectedResourceId]);
       return rows[0]!.id;
     },
 
-    async revokeKey(db, actingSelf, granteeSelf, protectedResourceId) {
-      await db.query('SELECT domain.revoke_key($1, $2, $3)', [actingSelf, granteeSelf, protectedResourceId]);
+    async revokeKey(q, granteeSelf, protectedResourceId) {
+      await q.query('SELECT domain.revoke_key($1, $2)', [granteeSelf, protectedResourceId]);
     },
   };
 }

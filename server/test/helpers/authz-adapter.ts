@@ -139,7 +139,8 @@ export async function buildAuthzAdapter(opts: {
     if (typeof b?.seconds !== 'number' || !Number.isInteger(b.seconds)) {
       return reply.code(400).send({ error: 'bad_request' });
     }
-    return runVoid(reply, () => service.setDepartureInterval(accountCtx(req.account as string), b.seconds as number));
+    return runVoid(reply, () =>
+      service.setDepartureInterval(accountCtx(req.account as string, sha256(req.cookies[config.cookieName] as string)), b.seconds as number));
   });
 
   return app;
