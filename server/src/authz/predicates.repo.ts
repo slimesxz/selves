@@ -45,73 +45,54 @@ export interface PredicatesRepo {
   placementFacts(tx: Tx, actingSelf: string, placementId: string): Promise<PlacementFacts>;
 }
 
-/** The PostgreSQL implementation. Each query is bound to the acting Self and the
- *  requested resource; none loads a cross-Self superset. Requires only the
- *  column-scoped SELECT grants added in the P5-B migration. */
+/** The PostgreSQL implementation. P8 R1 (decision 0008 R1 / 0009): the Stage-1
+ *  fact reads are computed by owner-run SECURITY DEFINER functions
+ *  (domain.artifact_facts / domain.placement_facts), RLS-exempt by ownership, so
+ *  the decider never reads through the RLS mirror and the reason taxonomy survives
+ *  once RLS is enabled on the ontology tables (R2). Each function is bound to the
+ *  acting Self and the requested resource (equality only — F3); none loads a
+ *  cross-Self superset. The call runs inside the caller's REPEATABLE READ
+ *  transaction, so Stage-1 and the Stage-3 read share one snapshot (0005).
+ *
+ *  This repo now requires only EXECUTE on the two domain functions — no direct
+ *  table SELECT. (The Phase-7 byte-identity of this file was released by R1.) */
 export function createPredicatesRepo(): PredicatesRepo {
   return {
     async artifactFacts(tx, actingSelf, artifactId) {
-      // (a) existence + authorship
-      const a = await tx.query<{ author_self_id: string | null }>(
-        'SELECT author_self_id FROM public.artifacts WHERE id = $1',
-        [artifactId],
-      );
-      const present = a.rows.length > 0;
-      const authorSelfId = present ? (a.rows[0]?.author_self_id ?? null) : null;
-
-      // (b) recipient ground, state-resolved, across every placement carrying it
-      const r = await tx.query<{ any_settled: boolean | null; any_recipient: boolean | null }>(
-        `SELECT bool_or(p.state = 'settled') AS any_settled,
-                count(*) > 0                 AS any_recipient
-           FROM public.placements p
-           JOIN public.placement_recipients pr ON pr.placement_id = p.id
-          WHERE p.artifact_id = $1 AND pr.recipient_self_id = $2`,
-        [artifactId, actingSelf],
-      );
-
-      // (c) Key ground — actor-scoped only, so a Key to a DIFFERENT resource is
-      // seen (has_active_elsewhere) and classified KEY_WRONG_RESOURCE, not
-      // silently ignored (Gate 1 §4, addendum §4 correction).
-      const k = await tx.query<{
-        has_active_for_target: boolean | null;
-        has_revoked_for_target: boolean | null;
-        has_active_elsewhere: boolean | null;
-      }>(
-        `SELECT bool_or(revoked_at IS NULL     AND protected_resource_id =  $2) AS has_active_for_target,
-                bool_or(revoked_at IS NOT NULL AND protected_resource_id =  $2) AS has_revoked_for_target,
-                bool_or(revoked_at IS NULL     AND protected_resource_id <> $2) AS has_active_elsewhere
-           FROM public.key_grants
-          WHERE grantee_self_id = $1`,
-        [actingSelf, artifactId],
-      );
-
+      const { rows } = await tx.query<{
+        present: boolean;
+        author_self_id: string | null;
+        any_settled_recipient: boolean;
+        any_recipient: boolean;
+        has_active_for_target: boolean;
+        has_revoked_for_target: boolean;
+        has_active_elsewhere: boolean;
+      }>('SELECT * FROM domain.artifact_facts($1, $2)', [actingSelf, artifactId]);
+      const f = rows[0]!; // the DEFINER function always returns exactly one row
       return {
-        present,
-        authorSelfId,
-        anySettledRecipient: r.rows[0]?.any_settled === true,
-        anyRecipient: r.rows[0]?.any_recipient === true,
-        hasActiveForTarget: k.rows[0]?.has_active_for_target === true,
-        hasRevokedForTarget: k.rows[0]?.has_revoked_for_target === true,
-        hasActiveElsewhere: k.rows[0]?.has_active_elsewhere === true,
+        present: f.present,
+        authorSelfId: f.author_self_id ?? null,
+        anySettledRecipient: f.any_settled_recipient,
+        anyRecipient: f.any_recipient,
+        hasActiveForTarget: f.has_active_for_target,
+        hasRevokedForTarget: f.has_revoked_for_target,
+        hasActiveElsewhere: f.has_active_elsewhere,
       };
     },
 
     async placementFacts(tx, actingSelf, placementId) {
-      const p = await tx.query<{ sender_self_id: string | null; state: string | null }>(
-        'SELECT sender_self_id, state FROM public.placements WHERE id = $1',
-        [placementId],
-      );
-      const present = p.rows.length > 0;
-      const recipient = await tx.query(
-        `SELECT 1 AS ok FROM public.placement_recipients
-          WHERE placement_id = $1 AND recipient_self_id = $2 LIMIT 1`,
-        [placementId, actingSelf],
-      );
+      const { rows } = await tx.query<{
+        present: boolean;
+        sender_self_id: string | null;
+        state: string | null;
+        recipient_row: boolean;
+      }>('SELECT * FROM domain.placement_facts($1, $2)', [actingSelf, placementId]);
+      const f = rows[0]!; // the DEFINER function always returns exactly one row
       return {
-        present,
-        senderSelfId: present ? (p.rows[0]?.sender_self_id ?? null) : null,
-        state: present ? (p.rows[0]?.state ?? null) : null,
-        recipientRow: recipient.rows.length > 0,
+        present: f.present,
+        senderSelfId: f.sender_self_id ?? null,
+        state: f.state ?? null,
+        recipientRow: f.recipient_row,
       };
     },
   };

@@ -1,9 +1,5 @@
 import './helpers/env';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import type pg from 'pg';
 import { makeAuthz, actingCtx, accountCtx, newAccount, newSelf, capturingSink } from './helpers/authz.ts';
 import type { AuthorizationService } from '../src/authz/service.ts';
@@ -12,22 +8,60 @@ import type { DecisionSink, Outcome } from '../src/authz/reasons.ts';
 // P7-E — R3 is a STRUCTURAL invariant (decision 0007, audit point 3). A Key
 // Placement carries artifact_id = NULL, so it can never satisfy the Phase-5
 // RECIPIENT_SETTLED artifact-read predicate for its protected Artifact. The sole
-// revocable read path is KEY_VALID through key_grants. This is proven WITHOUT
-// modifying the Phase-5 predicate: predicates.repo.ts is byte-identical to 716c95d.
+// revocable read path is KEY_VALID through key_grants.
+//
+// P8 R1 (decision 0008 R1 / 0009) moved the Stage-1 fact computation behind the
+// owner-run domain.artifact_facts function, and expressly RELEASED the Phase-7
+// byte-identity of predicates.repo.ts (a Phase-7-scoped guarantee discharged at
+// 58d5a4f). The structural invariant that byte-identity protected is re-proven
+// here directly at the new predicate boundary, which is stronger than a file
+// comparison: domain.artifact_facts resolves the recipient ground by joining on
+// p.artifact_id, and a Key Placement carries artifact_id = NULL, so it can never
+// contribute anySettledRecipient / anyRecipient for the protected Artifact.
 
-const here = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(here, '../..'); // server/test -> repo root
-const PRED = resolve(here, '../src/authz/predicates.repo.ts');
+describe('R3 — domain.artifact_facts gives a Key Placement no recipient ground (structural)', () => {
+  let h: ReturnType<typeof makeAuthz>;
+  let su: pg.Pool;
+  let app: pg.Pool;
+  let service: AuthorizationService;
 
-describe('R3 — predicates.repo.ts is byte-identical to 716c95d', () => {
-  it('the Phase-5 predicate implementation is unchanged (no behavioural patch for keys)', () => {
-    const atBaseline = execFileSync(
-      'git',
-      ['show', '716c95d:server/src/authz/predicates.repo.ts'],
-      { cwd: REPO },
-    );
-    const current = readFileSync(PRED);
-    expect(current.equals(atBaseline)).toBe(true);
+  beforeAll(() => {
+    h = makeAuthz();
+    su = h.su;
+    app = h.appPool;
+    service = h.service;
+  });
+  afterAll(() => h.end());
+
+  async function elapseFloor(id: string): Promise<void> {
+    await su.query("UPDATE public.placements SET created_at = now() - interval '2 min', departing_at = now() - interval '90 sec' WHERE id = $1", [id]);
+  }
+
+  it('a settled Key Placement (artifact_id NULL) contributes no recipient ground for its protected Artifact', async () => {
+    const account = await newAccount(su);
+    const grantor = await newSelf(su, account, 1, 'grantor');
+    const grantee = await newSelf(su, account, 2, 'grantee');
+    const R = await service.createArtifact(actingCtx(grantor), 'secret');
+
+    await service.setDepartureInterval(accountCtx(account), 5);
+    const kp = await service.createKeyPlacementDraft(actingCtx(grantor), R);
+    await service.addRecipient(actingCtx(grantor), kp, grantee);
+    await service.beginDeparture(actingCtx(grantor), kp);
+    await elapseFloor(kp);
+    await service.settlePlacement(actingCtx(grantor), kp);
+
+    // the settled Key Placement holds NO content artifact_id …
+    expect((await su.query<{ artifact_id: string | null }>(
+      'SELECT artifact_id FROM public.placements WHERE id = $1', [kp])).rows[0]!.artifact_id).toBeNull();
+
+    // … so the Stage-1 recipient ground for R is empty, though the grant is active:
+    // the sole revocable read path is KEY_VALID, never RECIPIENT_SETTLED (R3).
+    const f = (await app.query<{
+      any_settled_recipient: boolean; any_recipient: boolean; has_active_for_target: boolean;
+    }>('SELECT * FROM domain.artifact_facts($1, $2)', [grantee, R])).rows[0]!;
+    expect(f.any_settled_recipient).toBe(false);
+    expect(f.any_recipient).toBe(false);
+    expect(f.has_active_for_target).toBe(true);
   });
 });
 
