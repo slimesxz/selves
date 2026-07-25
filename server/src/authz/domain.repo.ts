@@ -118,16 +118,16 @@ export function createDomainRepo(): DomainRepo {
       return rows.map(toArtifact);
     },
 
-    async listReadablePlacements(tx, actingSelf) {
-      // authored (any state) ∪ settled placements addressed to the actor.
-      const { rows } = await tx.query<PlacementRow>(
-        `SELECT ${PLACEMENT_COLS} FROM public.placements p
-          WHERE p.sender_self_id = $1
-             OR ( p.state = 'settled'
-                  AND EXISTS ( SELECT 1 FROM public.placement_recipients r
-                                WHERE r.placement_id = p.id AND r.recipient_self_id = $1 ) )
-          ORDER BY p.created_at, p.id`,
-        [actingSelf],
+    async listReadablePlacements(_tx, _actingSelf) {
+      // P8 I: authorization is enforced by RLS on public.placements — author (any
+      // state) ∪ (settled ∧ explicit recipient), keyed on the established acting-Self
+      // context. The query is UNFILTERED fixed SQL: an inline recipient subquery here
+      // would be evaluated with the invoking role's privileges and blocked by
+      // placement_recipients' author-only RLS (it would drop the actor's OWN settled
+      // placements), whereas the placements policy resolves the recipient ground via
+      // the owner-run helper. Relying on RLS yields exactly the readable set.
+      const { rows } = await _tx.query<PlacementRow>(
+        `SELECT ${PLACEMENT_COLS} FROM public.placements ORDER BY created_at, id`,
       );
       return rows.map(toPlacement);
     },

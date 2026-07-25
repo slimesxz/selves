@@ -5,6 +5,7 @@ import type { AppConfig } from '../../src/config.ts';
 import type { Queryable } from '../../src/db.ts';
 import type { AuthorizationService } from '../../src/authz/service.ts';
 import { mapDenied, mapMutationError } from '../../src/authz/reasons.ts';
+import { sha256 } from '../../src/crypto.ts';
 import { accountCtx, actingCtx } from './authz.ts';
 
 // TEST-ONLY external adapter, mounted ONLY from the test composition root (the
@@ -39,7 +40,10 @@ export async function buildAuthzAdapter(opts: {
   const accountScoped = { preHandler: [authenticate] };
 
   const idOf = (req: FastifyRequest): string => (req.params as { id: string }).id;
-  const actor = (req: FastifyRequest) => actingCtx(req.actingSelf as string);
+  // P8 C3: carry the REAL session (the authenticated cookie's token hash) so a
+  // protected read establishes acting-Self context through the ratified setter.
+  const actor = (req: FastifyRequest) =>
+    actingCtx(req.actingSelf as string, sha256(req.cookies[config.cookieName] as string));
   const deny = (reply: FastifyReply): FastifyReply => {
     const e = mapDenied();
     return reply.code(e.status).send(e.body);

@@ -54,10 +54,13 @@ describe('P8 F3 — fixed-query source invariant', () => {
 
   it('every policed-table query compares bound parameters by equality (no interpolated predicate)', () => {
     const src = read('authz/domain.repo.ts');
-    // Each WHERE fragment against a policed column is "<col> = $N" — bound, equality.
-    for (const frag of ['id = $1', 'author_self_id = $1', 'p.sender_self_id = $1', 'r.recipient_self_id = $1', 'pr.placement_id = $1', 'p.sender_self_id = $2']) {
+    // Each remaining WHERE fragment against a policed column is "<col> = $N" — bound,
+    // equality. (listReadablePlacements now carries no WHERE: RLS filters it.)
+    for (const frag of ['id = $1', 'author_self_id = $1', 'pr.placement_id = $1', 'p.sender_self_id = $2']) {
       expect(src.includes(frag), `expected bound equality fragment: ${frag}`).toBe(true);
     }
+    // The RLS-blocked inline recipient subquery was removed from the list read.
+    expect(src.includes('r.recipient_self_id = $1'), 'no inline recipient subquery remains').toBe(false);
   });
 });
 

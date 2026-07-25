@@ -19,8 +19,20 @@ import { PLACEMENT_STATES } from '../domain/placement.ts';
 // (req.actingSelf). The service never re-derives identity and never trusts an
 // acting Self from a body, query, route, client claim, or repository result
 // (Gate 1 invariant 3).
+//
+// P8 C3 (decisions 0008 R4-B / 0009 §2): a protected READ additionally carries the
+// session token HASH. It is established as the transaction-local acting-Self
+// context by the owner-run domain.set_acting_self setter (gated on auth.sessions)
+// as the first statement of the read transaction, so the RLS policies admit exactly
+// the rows the decision authorizes. The token is OPTIONAL only so pure decision
+// tests with mock transactions need not supply one; a real policed read with no
+// established context reads zero rows (fail-closed). The token is carried ONLY as a
+// bind parameter to the setter — it is never logged, serialized, or placed in
+// statement text (0009 §3.4). Mutations do not use it (they run through the DEFINER
+// write boundary, which bypasses RLS by ownership).
 export interface ActingContext {
   readonly actingSelf: SelfId;
+  readonly sessionToken?: Buffer | undefined;
 }
 
 // Account-scoped context for the one operation whose authority is the AUTHENTICATED
@@ -133,6 +145,15 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
   const { txPool, db, predicates, domain, mutations } = deps;
   const sink: DecisionSink = deps.sink ?? NoopSink;
 
+  // P8 C3: establish the transaction-local acting-Self context as the FIRST
+  // statement of every protected read transaction. The setter validates the
+  // session token against auth.sessions and that the acting Self belongs to that
+  // account, then binds (backend_pid, xid8) → acting Self. RLS policies then admit
+  // exactly the authorized rows; absent/invalid context reads zero rows. The token
+  // is passed ONLY as a bind parameter — never interpolated, logged, or serialized.
+  const establishContext = (tx: Tx, ctx: ActingContext): Promise<unknown> =>
+    tx.query('SELECT domain.set_acting_self($1, $2)', [ctx.sessionToken, ctx.actingSelf]);
+
   const readSingle = async <T>(
     operation: string,
     tx: Tx,
@@ -149,37 +170,46 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
 
   return {
     readArtifact(ctx, artifactId) {
-      return txPool.withRepeatableRead((tx) =>
-        readSingle(
+      return txPool.withRepeatableRead(async (tx) => {
+        await establishContext(tx, ctx);
+        return readSingle(
           'readArtifact',
           tx,
           async () => decideArtifact(await predicates.artifactFacts(tx, ctx.actingSelf, artifactId), ctx.actingSelf),
           () => domain.readArtifact(tx, artifactId),
-        ),
-      );
+        );
+      });
     },
 
     readPlacement(ctx, placementId) {
-      return txPool.withRepeatableRead((tx) =>
-        readSingle(
+      return txPool.withRepeatableRead(async (tx) => {
+        await establishContext(tx, ctx);
+        return readSingle(
           'readPlacement',
           tx,
           async () => decidePlacement(await predicates.placementFacts(tx, ctx.actingSelf, placementId), ctx.actingSelf),
           () => domain.readPlacement(tx, placementId),
-        ),
-      );
+        );
+      });
     },
 
     listOwnedArtifacts(ctx) {
-      return txPool.withRepeatableRead((tx) => domain.listOwnedArtifacts(tx, ctx.actingSelf));
+      return txPool.withRepeatableRead(async (tx) => {
+        await establishContext(tx, ctx);
+        return domain.listOwnedArtifacts(tx, ctx.actingSelf);
+      });
     },
 
     listReadablePlacements(ctx) {
-      return txPool.withRepeatableRead((tx) => domain.listReadablePlacements(tx, ctx.actingSelf));
+      return txPool.withRepeatableRead(async (tx) => {
+        await establishContext(tx, ctx);
+        return domain.listReadablePlacements(tx, ctx.actingSelf);
+      });
     },
 
     listRecipientsOfAuthoredPlacement(ctx, placementId) {
       return txPool.withRepeatableRead(async (tx) => {
+        await establishContext(tx, ctx);
         const rows = await domain.listRecipientsOfAuthoredPlacement(tx, ctx.actingSelf, placementId);
         // Constitutive operation marker: the author-scoped containment list ran
         // for this actor (§2/§3). Not a per-resource decision; sink is test-only.

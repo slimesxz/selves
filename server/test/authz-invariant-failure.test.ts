@@ -50,11 +50,15 @@ describe('decidePlacement — invariant failures (pure)', () => {
 });
 
 // A transaction handle whose use would throw — proving neither the predicate
-// double nor any protected read touches the database on the failure path.
+// double nor any protected read touches the database on the failure path. P8 C3
+// (harness adaptation): the read path establishes acting-Self context as its FIRST
+// statement, so permit ONLY that call and still throw on any protected read —
+// preserving the ratified observable outcomes (invariant_failure, no protected read).
 const throwingTx: Tx = {
-  query: async () => {
-    throw new Error('tx must not be used on the invariant-failure path');
-  },
+  query: (async (text: string) => {
+    if (String(text).includes('set_acting_self')) return { rows: [] };
+    throw new Error('tx must not be used beyond context establishment on the invariant-failure path');
+  }) as Tx['query'],
 };
 const fakeTxPool: TxPool = {
   withRepeatableRead: (fn) => fn(throwingTx),
