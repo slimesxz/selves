@@ -45,20 +45,22 @@ export interface PredicatesRepo {
   placementFacts(tx: Tx, actingSelf: string, placementId: string): Promise<PlacementFacts>;
 }
 
-/** The PostgreSQL implementation. P8 R1 (decision 0008 R1 / 0009): the Stage-1
- *  fact reads are computed by owner-run SECURITY DEFINER functions
- *  (domain.artifact_facts / domain.placement_facts), RLS-exempt by ownership, so
- *  the decider never reads through the RLS mirror and the reason taxonomy survives
- *  once RLS is enabled on the ontology tables (R2). Each function is bound to the
- *  acting Self and the requested resource (equality only — F3); none loads a
- *  cross-Self superset. The call runs inside the caller's REPEATABLE READ
- *  transaction, so Stage-1 and the Stage-3 read share one snapshot (0005).
+/** The PostgreSQL implementation. P8 R1 (decision 0008 R1 / 0009) + P8 J
+ *  (0008-C §3): the Stage-1 facts are computed by owner-run SECURITY DEFINER
+ *  functions, RLS-exempt by ownership, so the decider never reads through the RLS
+ *  mirror (R1 preserved). P8 J removed the caller-supplied acting-Self argument:
+ *  the functions derive the acting Self from the trusted C3 context established at
+ *  the start of the read transaction (step I), and fail closed without it. The
+ *  `actingSelf` parameter is retained here only because the Stage-2 decision still
+ *  consumes it (decideArtifact/decidePlacement compare authorship/sender); it is
+ *  NOT sent to the database as an authority selector — it equals current_acting_self()
+ *  by construction (the service establishes context = ctx.actingSelf first).
  *
- *  This repo now requires only EXECUTE on the two domain functions — no direct
- *  table SELECT. (The Phase-7 byte-identity of this file was released by R1.) */
+ *  This repo requires only EXECUTE on the two domain functions — no direct table
+ *  SELECT and no acting-Self identity argument. */
 export function createPredicatesRepo(): PredicatesRepo {
   return {
-    async artifactFacts(tx, actingSelf, artifactId) {
+    async artifactFacts(tx, _actingSelf, artifactId) {
       const { rows } = await tx.query<{
         present: boolean;
         author_self_id: string | null;
@@ -67,7 +69,7 @@ export function createPredicatesRepo(): PredicatesRepo {
         has_active_for_target: boolean;
         has_revoked_for_target: boolean;
         has_active_elsewhere: boolean;
-      }>('SELECT * FROM domain.artifact_facts($1, $2)', [actingSelf, artifactId]);
+      }>('SELECT * FROM domain.artifact_facts($1)', [artifactId]);
       const f = rows[0]!; // the DEFINER function always returns exactly one row
       return {
         present: f.present,
@@ -80,13 +82,13 @@ export function createPredicatesRepo(): PredicatesRepo {
       };
     },
 
-    async placementFacts(tx, actingSelf, placementId) {
+    async placementFacts(tx, _actingSelf, placementId) {
       const { rows } = await tx.query<{
         present: boolean;
         sender_self_id: string | null;
         state: string | null;
         recipient_row: boolean;
-      }>('SELECT * FROM domain.placement_facts($1, $2)', [actingSelf, placementId]);
+      }>('SELECT * FROM domain.placement_facts($1)', [placementId]);
       const f = rows[0]!; // the DEFINER function always returns exactly one row
       return {
         present: f.present,

@@ -1,7 +1,7 @@
 import './helpers/env';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { makeAuthz, actingCtx, accountCtx, newAccount, newSelf, capturingSink } from './helpers/authz.ts';
+import { makeAuthz, actingCtx, accountCtx, newAccount, newSelf, capturingSink, withEstablishedContext } from './helpers/authz.ts';
 import type { AuthorizationService } from '../src/authz/service.ts';
 import type { DecisionSink, Outcome } from '../src/authz/reasons.ts';
 
@@ -56,9 +56,10 @@ describe('R3 — domain.artifact_facts gives a Key Placement no recipient ground
 
     // … so the Stage-1 recipient ground for R is empty, though the grant is active:
     // the sole revocable read path is KEY_VALID, never RECIPIENT_SETTLED (R3).
-    const f = (await app.query<{
+    // P8 J: artifact_facts derives the acting Self from C3 context (single-arg).
+    const f = (await withEstablishedContext(app, grantee, (c) => c.query<{
       any_settled_recipient: boolean; any_recipient: boolean; has_active_for_target: boolean;
-    }>('SELECT * FROM domain.artifact_facts($1, $2)', [grantee, R])).rows[0]!;
+    }>('SELECT * FROM domain.artifact_facts($1)', [R]))).rows[0]!;
     expect(f.any_settled_recipient).toBe(false);
     expect(f.any_recipient).toBe(false);
     expect(f.has_active_for_target).toBe(true);

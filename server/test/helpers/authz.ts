@@ -75,6 +75,27 @@ export function actingCtx(selfId: string, sessionToken?: Buffer): ActingContext 
   return { actingSelf: selfId as SelfId, sessionToken: sessionToken ?? _sessionTokenBySelf.get(selfId) };
 }
 
+/** Run `fn` on one connection inside a transaction with C3 acting-Self context
+ *  established for `self` (its registered session). For tests that call the
+ *  now-context-bound DEFINER functions directly. Always rolled back. */
+export async function withEstablishedContext<R>(
+  pool: pg.Pool,
+  self: string,
+  fn: (c: pg.PoolClient) => Promise<R>,
+): Promise<R> {
+  const token = _sessionTokenBySelf.get(self);
+  if (!token) throw new Error(`no session registered for self ${self}`);
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('SELECT domain.set_acting_self($1, $2)', [token, self]);
+    return await fn(c);
+  } finally {
+    await c.query('ROLLBACK').catch(() => {});
+    c.release();
+  }
+}
+
 // Account-scoped context (the authenticated account), for set_departure_interval.
 export function accountCtx(accountId: string): AccountContext {
   return { account: accountId as AccountId };
