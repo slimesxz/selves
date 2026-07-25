@@ -16,11 +16,13 @@ const GRANTED: Record<string, string[]> = {
   placements: ['id', 'sender_self_id', 'artifact_id', 'state', 'created_at', 'departing_at', 'settled_at', 'cancelled_at'],
   placement_recipients: ['placement_id', 'recipient_self_id', 'added_at'],
   key_grants: ['grantee_self_id', 'protected_resource_id', 'revoked_at'],
-  // pre-existing (Phase 4), asserted here for completeness of the matrix.
-  selves: ['id', 'account_id', 'name', 'self_slot'],
 };
 // Tables selves_app must hold NOTHING on.
-const NO_ACCESS_TABLES = ['accounts', 'outbox_events'];
+// P8 R7.2 (decision 0008 R7.2 / 0009): public.selves joins this set. The
+// account→Self linkage (the sibling map) is no longer directly readable by
+// selves_app; both identity reads (selfOwnedByAccount, listSelves) are now
+// owner-run SECURITY DEFINER functions, so every selves column grant is revoked.
+const NO_ACCESS_TABLES = ['accounts', 'outbox_events', 'selves'];
 
 let su: pg.Pool;
 let app: pg.Pool;
@@ -103,5 +105,9 @@ describe('P5-B exact selves_app read-privilege matrix', () => {
     await expectPgError(() => app.query('SELECT * FROM public.key_grants'), '42501'); // * spans withheld columns
     await expectPgError(() => app.query('SELECT * FROM public.accounts'), '42501');
     await expectPgError(() => app.query('SELECT * FROM public.outbox_events'), '42501');
+    // P8 R7.2: selves_app no longer reads the account→Self map directly.
+    await expectPgError(() => app.query('SELECT * FROM public.selves'), '42501');
+    await expectPgError(() => app.query('SELECT id FROM public.selves'), '42501');
+    await expectPgError(() => app.query('SELECT account_id FROM public.selves'), '42501');
   });
 });

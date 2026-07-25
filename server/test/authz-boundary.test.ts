@@ -58,11 +58,15 @@ describe('P4-F function-authorization boundary', () => {
     await expectPgError(() => operator.query('UPDATE auth.account_credentials SET disabled_at = now()'), '42501');
   });
 
-  it('app retains exactly its column-scoped read on public.selves', async () => {
+  it('app holds no direct read on public.selves (P8 R7.2 narrowed it away)', async () => {
     const e = await enroll(boot);
-    const { rows } = await app.query('SELECT id, account_id, name, self_slot FROM public.selves WHERE id = $1', [e.selfId]);
-    expect(rows).toHaveLength(1);
-    await expectPgError(() => app.query('SELECT created_at FROM public.selves'), '42501'); // column not granted
+    // P8 R7.2 (decision 0008 R7.2 / 0009): the account→Self map is no longer
+    // directly readable by selves_app; both identity reads are DEFINER-mediated.
+    await expectPgError(
+      () => app.query('SELECT id, account_id, name, self_slot FROM public.selves WHERE id = $1', [e.selfId]),
+      '42501',
+    );
+    await expectPgError(() => app.query('SELECT created_at FROM public.selves'), '42501');
   });
 
   it('DEFINER functions ignore a caller-controlled search_path (no name redirection)', async () => {

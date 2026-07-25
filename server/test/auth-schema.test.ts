@@ -115,12 +115,13 @@ describe('P4-B auth schema inventory', () => {
     }
   });
 
-  it('the only direct table grant is selves_app column-scoped SELECT on public.selves', async () => {
+  it('selves_app holds no direct table grant on public.selves (P8 R7.2 narrowed it away)', async () => {
     const colSel = async (role: string, col: string) =>
       (await su.query('SELECT has_column_privilege($1, $2, $3, $4) AS ok', [role, 'public.selves', col, 'SELECT'])).rows[0].ok;
-    // app: granted exactly (id, account_id, name, self_slot)
-    for (const c of ['id', 'account_id', 'name', 'self_slot']) expect(await colSel('selves_app', c), `app SELECT ${c}`).toBe(true);
-    expect(await colSel('selves_app', 'created_at'), 'app SELECT created_at (not granted)').toBe(false);
+    // P8 R7.2 (decision 0008 R7.2 / 0009): every selves column grant is revoked;
+    // both identity reads (selfOwnedByAccount, listSelves) are now owner-run
+    // SECURITY DEFINER functions, so the app role holds nothing directly on selves.
+    for (const c of ['id', 'account_id', 'name', 'self_slot', 'created_at']) expect(await colSel('selves_app', c), `app SELECT ${c} (revoked by R7.2)`).toBe(false);
     // app: no write on selves, nothing on accounts / auth tables
     const tbl = async (role: string, t: string, p: string) =>
       (await su.query('SELECT has_table_privilege($1, $2, $3) AS ok', [role, t, p])).rows[0].ok;

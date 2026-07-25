@@ -42,10 +42,18 @@ export async function revokeSession(db: Queryable, tokenHash: Buffer): Promise<v
 }
 
 /** Is this Self owned by this account? Checked against the authoritative store on
- *  every protected Self-scoped request — a prior success is never standing auth. */
+ *  every protected Self-scoped request — a prior success is never standing auth.
+ *
+ *  P8 R7.2: the account→Self linkage (the sibling map) is no longer directly
+ *  readable by selves_app. This resolves through an owner-run SECURITY DEFINER
+ *  function taking the VERIFIED ACCOUNT as its first argument (never an acting
+ *  Self); the app holds only EXECUTE on it (decision 0008 R7.2 / 0009). */
 export async function selfOwnedByAccount(db: Queryable, selfId: string, account: string): Promise<boolean> {
-  const { rows } = await db.query('SELECT 1 AS ok FROM public.selves WHERE id = $1 AND account_id = $2', [selfId, account]);
-  return rows.length > 0;
+  const { rows } = await db.query<{ ok: boolean }>(
+    'SELECT domain.self_owned_by_account($1, $2) AS ok',
+    [account, selfId],
+  );
+  return rows[0]?.ok === true;
 }
 
 export interface SelfSummary {
@@ -55,10 +63,14 @@ export interface SelfSummary {
 }
 
 /** The account's own Selves, deterministically ordered by slot. Supports the
- *  ratified Self switcher. Account-scoped: no acting-Self context required. */
+ *  ratified Self switcher. Account-scoped: no acting-Self context required.
+ *
+ *  P8 R7.2: resolves through the owner-run SECURITY DEFINER function
+ *  domain.list_account_selves (verified account as its argument); selves_app no
+ *  longer reads public.selves directly (decision 0008 R7.2 / 0009). */
 export async function listSelves(db: Queryable, account: string): Promise<SelfSummary[]> {
   const { rows } = await db.query<{ id: string; name: string; self_slot: number }>(
-    'SELECT id, name, self_slot FROM public.selves WHERE account_id = $1 ORDER BY self_slot',
+    'SELECT id, name, self_slot FROM domain.list_account_selves($1)',
     [account],
   );
   return rows.map((r) => ({ id: r.id, name: r.name, slot: r.self_slot }));
