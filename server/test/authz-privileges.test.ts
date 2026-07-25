@@ -15,14 +15,17 @@ const GRANTED: Record<string, string[]> = {
   artifacts: ['id', 'author_self_id', 'payload_type', 'text_body', 'created_at'],
   placements: ['id', 'sender_self_id', 'artifact_id', 'state', 'created_at', 'departing_at', 'settled_at', 'cancelled_at'],
   placement_recipients: ['placement_id', 'recipient_self_id', 'added_at'],
-  key_grants: ['grantee_self_id', 'protected_resource_id', 'revoked_at'],
 };
 // Tables selves_app must hold NOTHING on.
 // P8 R7.2 (decision 0008 R7.2 / 0009): public.selves joins this set. The
 // account→Self linkage (the sibling map) is no longer directly readable by
 // selves_app; both identity reads (selfOwnedByAccount, listSelves) are now
 // owner-run SECURITY DEFINER functions, so every selves column grant is revoked.
-const NO_ACCESS_TABLES = ['accounts', 'outbox_events', 'selves'];
+// P8 R5 (decision 0008 R5 / 0009): public.key_grants joins this set. Once the
+// grantee-fact read moved into domain.artifact_facts (R1), selves_app has no
+// reason to read the capability register; the column grant is revoked entirely
+// and RLS is enabled with no application policy (register invisible to the app).
+const NO_ACCESS_TABLES = ['accounts', 'outbox_events', 'selves', 'key_grants'];
 
 let su: pg.Pool;
 let app: pg.Pool;
@@ -68,8 +71,10 @@ describe('P5-B exact selves_app read-privilege matrix', () => {
     }
   });
 
-  it('withholds id, grantor_self_id, and granted_at on key_grants', async () => {
-    for (const col of ['id', 'grantor_self_id', 'granted_at']) {
+  it('withholds EVERY key_grants column (P8 R5: the register is invisible to the app)', async () => {
+    // P8 R5 broadened this from the Phase-5 subset {id, grantor_self_id, granted_at}
+    // to the full column set — the entire capability register is now withheld.
+    for (const col of ['id', 'grantor_self_id', 'grantee_self_id', 'protected_resource_id', 'granted_at', 'revoked_at']) {
       expect(await colPriv('selves_app', 'key_grants', col), `key_grants.${col} withheld`).toBe(false);
     }
   });
@@ -95,14 +100,18 @@ describe('P5-B exact selves_app read-privilege matrix', () => {
     await app.query('SELECT id, author_self_id, payload_type, text_body, created_at FROM public.artifacts LIMIT 0');
     await app.query('SELECT id, sender_self_id, artifact_id, state, created_at, departing_at, settled_at, cancelled_at FROM public.placements LIMIT 0');
     await app.query('SELECT placement_id, recipient_self_id, added_at FROM public.placement_recipients LIMIT 0');
-    await app.query('SELECT grantee_self_id, protected_resource_id, revoked_at FROM public.key_grants LIMIT 0');
+    // P8 R5: no key_grants read remains — the register is not readable by the app.
   });
 
-  it('live: selves_app is denied (42501) on withheld key_grants columns and on ungranted tables', async () => {
+  it('live: selves_app is denied (42501) on the whole key_grants register and on ungranted tables', async () => {
+    // P8 R5: every key_grants column is revoked; each denies at the privilege layer.
     await expectPgError(() => app.query('SELECT granted_at FROM public.key_grants'), '42501');
     await expectPgError(() => app.query('SELECT grantor_self_id FROM public.key_grants'), '42501');
     await expectPgError(() => app.query('SELECT id FROM public.key_grants'), '42501');
-    await expectPgError(() => app.query('SELECT * FROM public.key_grants'), '42501'); // * spans withheld columns
+    await expectPgError(() => app.query('SELECT grantee_self_id FROM public.key_grants'), '42501');
+    await expectPgError(() => app.query('SELECT protected_resource_id FROM public.key_grants'), '42501');
+    await expectPgError(() => app.query('SELECT revoked_at FROM public.key_grants'), '42501');
+    await expectPgError(() => app.query('SELECT * FROM public.key_grants'), '42501');
     await expectPgError(() => app.query('SELECT * FROM public.accounts'), '42501');
     await expectPgError(() => app.query('SELECT * FROM public.outbox_events'), '42501');
     // P8 R7.2: selves_app no longer reads the account→Self map directly.

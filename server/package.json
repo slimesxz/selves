@@ -14,6 +14,7 @@
     "migrate": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -d MIGRATE_DATABASE_URL",
     "migrate:down": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down -d MIGRATE_DATABASE_URL",
     "migrate:test": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -d TEST_MIGRATE_DATABASE_URL",
+    "migrate:test:down": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down -d TEST_MIGRATE_DATABASE_URL",
     "db:up": "docker compose -f ../docker-compose.yml up -d",
     "db:down": "docker compose -f ../docker-compose.yml down",
     "db:reset": "docker compose -f ../docker-compose.yml down -v && docker compose -f ../docker-compose.yml up -d",
