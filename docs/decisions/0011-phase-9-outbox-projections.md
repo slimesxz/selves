@@ -379,3 +379,43 @@ the accepted conformance note.
 **Closure requirement:** the phase does not close on a local commit. Push to
 origin/master, verify over the network with `git ls-remote` in the same
 session, report in the standard format, and stop. Phase 10 is not authorized.
+
+---
+
+## 7. P9-G — ADDITIVE AMENDMENT (ruled by Liberty, 2026-07-25)
+
+These entries are **additive**. They record three items established during
+chamber audit, none defective against instructions in force at commit time.
+Nothing already recorded is amended.
+
+### 7.1 Second authorized baseline amendment
+
+`server/test/globalSetup.ts` was modified in P9-B to drop the `proj` schema
+before migrate-from-zero. It is a baseline file and is hereby recorded as the
+**second** authorized baseline amendment of this phase, alongside
+`authz-import-graph.test.ts`. Precedent: P6 established exactly this pattern for
+the `domain` schema. The change is correct and was disclosed; what is corrected
+is the ledger, not the code. **The phase's baseline amendment count is TWO, not
+one.**
+
+**Standing rule:** the amendment ledger is chamber record. A change to a
+baseline file enters the ledger regardless of whether it is characterized as
+harness, tooling, or test infrastructure.
+
+### 7.2 Chamber drafting error, recorded with provenance
+
+The Gate 2 regression obligation read "all 321 existing tests byte-unchanged."
+That was unsatisfiable as written: the chamber had authorized a lock delta in
+the same document, and the lock lives inside `authz-import-graph.test.ts`. The
+obligation should have read "byte-unchanged except
+`authz-import-graph.test.ts`, which changes only by the authorized lock delta."
+The builder satisfied the intent and disclosed the conflict rather than
+resolving it silently. **The error was the chamber's.**
+
+### 7.3 Revival test scope
+
+The revival test repairs the poison event's payload before revival. It
+therefore proves **revival-plus-cause-resolution, not revival alone**. This is
+the correct thing to prove — an unrepaired event fails again on the next pass —
+but it is stated here so a future reader does not mistake the test for proof
+that clearing `failed_at` and resetting `attempts` is sufficient on its own.
