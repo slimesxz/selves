@@ -14,12 +14,18 @@ import ts from 'typescript';
 // exempt from the value-access rules (this is what keeps the Phase-4 DI modules,
 // which import `type { Queryable }` from db.ts, legal). The forbidden edges:
 //
-//   * value-import of `pg`                    → only db.ts, operator/cli.ts
+//   * value-import of `pg`                    → only db.ts, operator/cli.ts,
+//     worker/db.ts (the P9 chamber-authorized single-entry expansion, 0011 Q10)
 //   * value-import of a raw pool binding      → only server.ts
 //     (appPool / appTxPool from db.ts)
 //   * value-import of an internal authz repo  → only authz/service.ts
 //     (predicates.repo.ts / domain.repo.ts)
 //   * ANY import of a test/ path from src/    → forbidden (no production→test dep)
+//   * P9 (0011 Q10/C2): src/authz/** may not import src/worker/** EVEN
+//     TYPE-ONLY; the worker tree may not value-import db.ts or any src/authz/**
+//     module; worker/db.ts is value-importable only from the worker composition
+//     root; and projection modules are scoped by ROLE not path — only the
+//     worker tree may reference the proj schema surface, wherever modules live.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(here, '../src');
@@ -33,10 +39,23 @@ const INTERNAL_REPOS = new Set([
 ]);
 
 // EXACT file-specific allowlists (repository state at implementation; no
-// directory-prefix exceptions).
-const PG_VALUE_ALLOW = new Set([resolve(SRC, 'db.ts'), resolve(SRC, 'operator/cli.ts')]);
+// directory-prefix exceptions). worker/db.ts is the single chamber-authorized
+// P9 expansion of the pg lock (0011 Q10) — the worker is a separate principal
+// with its own db module and its own credential, following operator/cli.ts.
+// RAW_POOL_VALUE_ALLOW is UNCHANGED: the worker never imports the app pool.
+const PG_VALUE_ALLOW = new Set([
+  resolve(SRC, 'db.ts'),
+  resolve(SRC, 'operator/cli.ts'),
+  resolve(SRC, 'worker/db.ts'),
+]);
 const RAW_POOL_VALUE_ALLOW = new Set([resolve(SRC, 'server.ts')]);
 const INTERNAL_REPO_VALUE_ALLOW = new Set([resolve(SRC, 'authz/service.ts')]);
+
+// P9 (0011 Q10/C2) — worker/projection containment boundaries.
+const WORKER_DIR = resolve(SRC, 'worker');
+const AUTHZ_DIR = resolve(SRC, 'authz');
+const WORKER_DB = resolve(SRC, 'worker/db.ts');
+const WORKER_MAIN = resolve(SRC, 'worker/main.ts');
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -169,7 +188,31 @@ describe('P5-A mechanical bypass containment (TypeScript AST import graph)', () 
           violations.push(`${rel}: imports a test/ path ('${e.spec}')`);
           continue;
         }
+        // P9 (0011 Q10): authorization code cannot reach projection modules —
+        // src/authz/** may not import src/worker/** EVEN TYPE-ONLY. This rule
+        // therefore precedes the type-only exemption below.
+        if (file.startsWith(`${AUTHZ_DIR}/`) && e.target && e.target.startsWith(`${WORKER_DIR}/`)) {
+          violations.push(`${rel}: imports a worker/projection module ('${e.spec}')`);
+          continue;
+        }
         if (!e.isValue) continue; // type-only edges are erased — exempt
+
+        // P9 (0011 Q10): the worker tree is credential-isolated — no module
+        // under src/worker/ may value-import db.ts (the app-credential module)
+        // or any src/authz/** module.
+        if (file.startsWith(`${WORKER_DIR}/`) && e.target) {
+          if (e.target === DB) {
+            violations.push(`${rel}: worker module value-imports db.ts`);
+          }
+          if (e.target.startsWith(`${AUTHZ_DIR}/`)) {
+            violations.push(`${rel}: worker module value-imports an authz module ('${e.spec}')`);
+          }
+        }
+        // P9 (0011 Q10): worker/db.ts is value-importable only from the worker
+        // composition root.
+        if (e.target === WORKER_DB && file !== WORKER_MAIN) {
+          violations.push(`${rel}: value-imports worker/db.ts (only worker/main.ts may)`);
+        }
 
         // 2. value-import of pg
         if (e.spec === 'pg' && !PG_VALUE_ALLOW.has(file)) {
@@ -216,7 +259,37 @@ describe('P5-A mechanical bypass containment (TypeScript AST import graph)', () 
       }
     }
 
-    expect([...pgValueImporters].sort()).toEqual(['db.ts', 'operator/cli.ts']);
+    // P9 (0011 Q10): the pg lock grew by EXACTLY the one chamber-authorized
+    // entry (worker/db.ts). RAW_POOL_VALUE_ALLOW is unchanged at ['server.ts'].
+    expect([...pgValueImporters].sort()).toEqual(['db.ts', 'operator/cli.ts', 'worker/db.ts']);
     expect([...rawPoolImporters].sort()).toEqual(['server.ts']);
+  });
+
+  it('P9 (0011 C2): projection modules are scoped by role, not path — only the worker tree references the proj schema', () => {
+    // The negative lock covers projection modules WHEREVER THEY RESIDE, not
+    // merely src/worker/ by path convention: a projection module is any
+    // production module referencing the proj schema surface (`proj.`). Today
+    // every projection module lives under src/worker/; if one is ever placed
+    // outside it, this test fails and the lock must name that module
+    // explicitly.
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (file.startsWith(`${WORKER_DIR}/`)) continue;
+      const text = readFileSync(file, 'utf8');
+      if (/\bproj\./.test(text)) offenders.push(relative(SRC, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('P9 (0011 Q10): the worker tree reads WORKER_DATABASE_URL and no other credential', () => {
+    const dbText = readFileSync(WORKER_DB, 'utf8');
+    expect(dbText).toMatch(/WORKER_DATABASE_URL/);
+    for (const file of walk(WORKER_DIR)) {
+      const text = readFileSync(file, 'utf8');
+      // Any *_DATABASE_URL (or bare DATABASE_URL) other than WORKER_DATABASE_URL
+      // is a foreign credential reference.
+      const foreign = text.match(/[A-Z_]*DATABASE_URL/g)?.filter((m) => m !== 'WORKER_DATABASE_URL') ?? [];
+      expect(foreign, `${relative(SRC, file)} references a non-worker credential`).toEqual([]);
+    }
   });
 });
