@@ -6,10 +6,10 @@
 // Contract only; the SQL implementation arrives in P5-C. Like the predicate repo,
 // it depends on a transaction handle (Tx), never the raw pool.
 import type { Tx } from '../db.ts';
-import type { Artifact, Placement, PlacementRecipient } from '../domain/records.ts';
-import type { ArtifactId, PlacementId, SelfId } from '../domain/ids.ts';
-import type { ArtifactPayloadType } from '../domain/payload.ts';
-import type { PlacementState } from '../domain/placement.ts';
+import type { Artifact, Placement, PlacementRecipient } from '@selves/domain';
+import type { ArtifactId, PlacementId, SelfId } from '@selves/domain';
+import type { ArtifactPayloadType } from '@selves/domain';
+import type { PlacementState } from '@selves/domain';
 
 export interface DomainRepo {
   /** Stage-3 read of an artifact by id (caller must already hold an allow). */

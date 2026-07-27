@@ -2,7 +2,7 @@
 // imports (AGENTS.md §8, decision 0001). This barrel is the single import
 // surface for the authoritative domain vocabulary.
 
-export * from './ids';
-export * from './payload';
-export * from './placement';
-export * from './records';
+export * from './ids.ts';
+export * from './payload.ts';
+export * from './placement.ts';
+export * from './records.ts';

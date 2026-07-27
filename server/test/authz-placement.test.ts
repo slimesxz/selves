@@ -5,7 +5,7 @@ import {
   actingCtx, capturingSink, makeAuthz, newAccount, newArtifact, newKeyGrant, newPlacement, newSelf,
   type AuthzHarness,
 } from './helpers/authz.ts';
-import { PLACEMENT_STATES, type PlacementState } from '../src/domain/placement.ts';
+import { PLACEMENT_STATES, type PlacementState } from '@selves/domain';
 import type { Outcome } from '../src/authz/reasons.ts';
 
 // P5-C — readPlacement, driven table-wise over the EXACT Phase-3 state set, and

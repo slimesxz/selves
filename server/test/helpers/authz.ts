@@ -8,8 +8,8 @@ import { createPredicatesRepo } from '../../src/authz/predicates.repo.ts';
 import { createDomainRepo } from '../../src/authz/domain.repo.ts';
 import { createMutationsRepo } from '../../src/authz/mutations.repo.ts';
 import type { DecisionSink, Outcome } from '../../src/authz/reasons.ts';
-import type { SelfId } from '../../src/domain/ids.ts';
-import type { PlacementState } from '../../src/domain/placement.ts';
+import type { SelfId } from '@selves/domain';
+import type { PlacementState } from '@selves/domain';
 
 // Wires the REAL AuthorizationService over a selves_app connection (appTestPool),
 // exactly as production would compose it. Fixtures below use a superuser pool so

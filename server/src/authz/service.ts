@@ -5,15 +5,15 @@
 //
 // This file declares the public contract. The factory (createAuthorizationService)
 // and the pure decision functions arrive in P5-C.
-import type { Artifact, Placement, PlacementRecipient } from '../domain/records.ts';
-import type { AccountId, SelfId } from '../domain/ids.ts';
+import type { Artifact, Placement, PlacementRecipient } from '@selves/domain';
+import type { AccountId, SelfId } from '@selves/domain';
 import type { Queryable, Tx, TxPool } from '../db.ts';
 import type { ArtifactFacts, PlacementFacts, PredicatesRepo } from './predicates.repo.ts';
 import type { DomainRepo } from './domain.repo.ts';
 import type { MutationsRepo } from './mutations.repo.ts';
 import type { ArtifactAllowGround, DecisionSink, Outcome, PlacementAllowGround } from './reasons.ts';
 import { NoopSink, isAllow } from './reasons.ts';
-import { PLACEMENT_STATES } from '../domain/placement.ts';
+import { PLACEMENT_STATES } from '@selves/domain';
 
 // The acting Self reaches the service ONLY through the verified Phase-4 context
 // (req.actingSelf). The service never re-derives identity and never trusts an
