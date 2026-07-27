@@ -1,5 +1,6 @@
 import './helpers/env';
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import pg from 'pg';
 
 // Proves migrate-from-zero on every test run under the Phase-4 privilege
@@ -33,9 +34,12 @@ export default async function setup(): Promise<void> {
   await su.end();
 
   // 3. Migrate from zero as selves_migrate (role=selves_owner).
+  // The CLI is located by module resolution, never by a physical node_modules
+  // path: workspace hoisting may place the package at any ancestor level.
+  const migrateBin = createRequire(import.meta.url).resolve('node-pg-migrate/bin/node-pg-migrate');
   try {
     execSync(
-      'node ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -d TEST_MIGRATE_DATABASE_URL',
+      `node ${JSON.stringify(migrateBin)} up -d TEST_MIGRATE_DATABASE_URL`,
       { cwd: process.cwd(), stdio: 'pipe', env: process.env },
     );
   } catch (err) {

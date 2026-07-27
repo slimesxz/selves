@@ -1,0 +1,11 @@
+{
+  "name": "selves",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=24.18.0 <25"
+  }
+}
