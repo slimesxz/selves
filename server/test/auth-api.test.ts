@@ -6,6 +6,8 @@ import type pg from 'pg';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { appTestPool, bootstrapPool, cookieFromSetCookie, enroll, sha256, superuserPool } from './helpers/auth.ts';
+import { appTxPool } from '../src/db.ts';
+import { createPostgresAuthorizationService, type AuthorizationService } from '../src/authz/service.ts';
 
 const ORIGIN = 'http://localhost:5173';
 const BAD_ORIGIN = 'http://evil.example';
@@ -14,12 +16,14 @@ let app: FastifyInstance;
 let appPool: pg.Pool;
 let bootstrap: pg.Pool;
 let su: pg.Pool;
+let service: AuthorizationService;
 
 beforeAll(async () => {
   appPool = appTestPool();
   bootstrap = bootstrapPool();
   su = superuserPool();
-  app = await buildApp({ db: appPool, config: loadConfig() });
+  service = createPostgresAuthorizationService({ txPool: appTxPool(appPool), db: appPool });
+  app = await buildApp({ db: appPool, config: loadConfig(), service });
   await app.ready();
 });
 
@@ -119,7 +123,7 @@ describe('P4-C authentication API', () => {
   });
 
   it('secure environments use the __Host- cookie name with Secure', async () => {
-    const secureApp = await buildApp({ db: appPool, config: loadConfig({ ...process.env, SELVES_COOKIE_SECURE: 'true' }) });
+    const secureApp = await buildApp({ db: appPool, config: loadConfig({ ...process.env, SELVES_COOKIE_SECURE: 'true' }), service });
     try {
       const { secret } = await enroll(bootstrap);
       const res = await secureApp.inject({ method: 'POST', url: '/auth/session', headers: { origin: ORIGIN }, payload: { secret } });
@@ -134,7 +138,7 @@ describe('P4-C authentication API', () => {
   it('never writes the enrollment secret or session token to logs', async () => {
     const logs: string[] = [];
     const stream = new Writable({ write(chunk, _enc, cb) { logs.push(chunk.toString()); cb(); } });
-    const loggedApp = await buildApp({ db: appPool, config: loadConfig(), logStream: stream });
+    const loggedApp = await buildApp({ db: appPool, config: loadConfig(), logStream: stream, service });
     try {
       const { secret } = await enroll(bootstrap);
       const res = await loggedApp.inject({ method: 'POST', url: '/auth/session', headers: { origin: ORIGIN }, payload: { secret } });

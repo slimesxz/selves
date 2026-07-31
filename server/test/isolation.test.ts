@@ -6,6 +6,8 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { addSelf, appTestPool, bootstrapPool, cookieFromSetCookie, enroll, superuserPool } from './helpers/auth.ts';
 import { buildAppWithProbe } from './helpers/probe.ts';
+import { appTxPool } from '../src/db.ts';
+import { createPostgresAuthorizationService } from '../src/authz/service.ts';
 
 const ORIGIN = 'http://localhost:5173';
 
@@ -16,8 +18,9 @@ let appPool: pg.Pool, bootstrap: pg.Pool, su: pg.Pool;
 beforeAll(async () => {
   appPool = appTestPool(); bootstrap = bootstrapPool(); su = superuserPool();
   const config = loadConfig();
-  app = await buildApp({ db: appPool, config });
-  probeApp = await buildAppWithProbe({ db: appPool, config });
+  const service = createPostgresAuthorizationService({ txPool: appTxPool(appPool), db: appPool });
+  app = await buildApp({ db: appPool, config, service });
+  probeApp = await buildAppWithProbe({ db: appPool, config, service });
   await app.ready(); await probeApp.ready();
 });
 afterAll(async () => {

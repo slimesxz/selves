@@ -40,7 +40,7 @@ beforeAll(async () => {
     mutations: createMutationsRepo(),
   });
   adapter = await buildAuthzAdapter({ db: appPool, config, service });
-  prod = await buildApp({ db: appPool, config });
+  prod = await buildApp({ db: appPool, config, service });
   await adapter.ready();
   await prod.ready();
 

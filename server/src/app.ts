@@ -12,8 +12,10 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import type { AppConfig } from './config.ts';
 import type { Queryable } from './db.ts';
+import type { AuthorizationService } from './authz/service.ts';
 import { sha256, newSessionToken } from './crypto.ts';
 import { authenticateSession, issueSession, listSelves, revokeSession, selfOwnedByAccount } from './auth/queries.ts';
+import { registerDomainRoutes } from './routes/domain.ts';
 
 // A single lowercase UUID assertion. Rejects empty, malformed, and duplicate
 // headers alike (duplicates arrive comma-joined and fail this test), so the
@@ -30,6 +32,11 @@ declare module 'fastify' {
 export interface BuildOptions {
   db: Queryable;
   config: AppConfig;
+  /** REQUIRED (P10-S3, candidate A): the domain AuthorizationService. The
+   *  sixteen frozen domain routes are registered unconditionally inside
+   *  buildApp — omission of this dependency is a compile-time failure, and a
+   *  successfully constructed app always carries the full frozen surface. */
+  service: AuthorizationService;
   /** Capture log output (tests); redaction is always applied. */
   logStream?: Writable;
 }
@@ -190,6 +197,16 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     }
     reply.clearCookie(config.cookieName, clearCookieOptions(config));
     return reply.code(204).send();
+  });
+
+  // ── the frozen domain surface (P10-S3) — registered UNCONDITIONALLY ───────
+  // Registration-by-construction: every successfully built app carries the
+  // sixteen frozen routes; the same exported middleware runs per-request.
+  registerDomainRoutes(app, {
+    config,
+    service: opts.service,
+    authenticate,
+    verifyActingSelf: makeVerifyActingSelf(db, config),
   });
 
   return app;

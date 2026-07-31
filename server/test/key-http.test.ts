@@ -73,7 +73,7 @@ beforeAll(async () => {
   su = h.su;
   boot = bootstrapPool();
   adapter = await buildAuthzAdapter({ db: h.appPool, config, service: h.service });
-  prod = await buildApp({ db: h.appPool, config });
+  prod = await buildApp({ db: h.appPool, config, service: h.service });
   await adapter.ready();
   await prod.ready();
 

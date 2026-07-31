@@ -11,6 +11,11 @@ import type { Queryable, Tx, TxPool } from '../db.ts';
 import type { ArtifactFacts, PlacementFacts, PredicatesRepo } from './predicates.repo.ts';
 import type { DomainRepo } from './domain.repo.ts';
 import type { MutationsRepo } from './mutations.repo.ts';
+// P10-S3 composition factory imports: this module is the ONLY file the
+// import-graph law permits to value-import the repository factories.
+import { createPredicatesRepo } from './predicates.repo.ts';
+import { createDomainRepo } from './domain.repo.ts';
+import { createMutationsRepo } from './mutations.repo.ts';
 import type { ArtifactAllowGround, DecisionSink, Outcome, PlacementAllowGround } from './reasons.ts';
 import { NoopSink, isAllow } from './reasons.ts';
 import { PLACEMENT_STATES } from '@selves/domain';
@@ -296,4 +301,23 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
       });
     },
   };
+}
+
+/** P10-S3 production composition factory (0012 §35 / S3 write authorization
+ *  item 7). Composes the EXISTING service over the PostgreSQL repositories —
+ *  this module is the only one the import-graph boundary permits to
+ *  value-import the repository factories, so production composition lives
+ *  here. No service operation, authorization behavior, context type, error
+ *  behavior, or credential site changes; no sink is introduced. */
+export function createPostgresAuthorizationService(deps: {
+  txPool: TxPool;
+  db: Queryable;
+}): AuthorizationService {
+  return createAuthorizationService({
+    txPool: deps.txPool,
+    db: deps.db,
+    predicates: createPredicatesRepo(),
+    domain: createDomainRepo(),
+    mutations: createMutationsRepo(),
+  });
 }

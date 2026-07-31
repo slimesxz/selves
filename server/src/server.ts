@@ -4,12 +4,18 @@
 // production route graph contains no /__test__ route.
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
-import { appPool } from './db.ts';
+import { appPool, appTxPool } from './db.ts';
+import { createPostgresAuthorizationService } from './authz/service.ts';
 
 const port = Number(process.env.PORT ?? 8080);
 const host = process.env.HOST ?? '127.0.0.1';
 
-const app = await buildApp({ db: appPool(), config: loadConfig() });
+const pool = appPool();
+const app = await buildApp({
+  db: pool,
+  config: loadConfig(),
+  service: createPostgresAuthorizationService({ txPool: appTxPool(pool), db: pool }),
+});
 
 try {
   await app.listen({ port, host });

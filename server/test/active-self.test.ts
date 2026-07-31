@@ -9,6 +9,8 @@ import {
   newEmptyAccount, reassignSelf, superuserPool,
 } from './helpers/auth.ts';
 import { buildAppWithProbe, type Recorder } from './helpers/probe.ts';
+import { appTxPool } from '../src/db.ts';
+import { createPostgresAuthorizationService } from '../src/authz/service.ts';
 
 const ORIGIN = 'http://localhost:5173';
 
@@ -24,9 +26,10 @@ beforeAll(async () => {
   bootstrap = bootstrapPool();
   su = superuserPool();
   const config = loadConfig();
-  app = await buildApp({ db: appPool, config });
+  const service = createPostgresAuthorizationService({ txPool: appTxPool(appPool), db: appPool });
+  app = await buildApp({ db: appPool, config, service });
   recorder = { handlerRan: false };
-  probeApp = await buildAppWithProbe({ db: appPool, config, recorder });
+  probeApp = await buildAppWithProbe({ db: appPool, config, service, recorder });
   await app.ready();
   await probeApp.ready();
 });
