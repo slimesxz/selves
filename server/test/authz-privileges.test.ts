@@ -13,7 +13,10 @@ import { expectPgError } from './helpers/db.ts';
 // The exact approved column grants (decision record 0005 / P5-B migration).
 const GRANTED: Record<string, string[]> = {
   artifacts: ['id', 'author_self_id', 'payload_type', 'text_body', 'created_at'],
-  placements: ['id', 'sender_self_id', 'artifact_id', 'state', 'created_at', 'departing_at', 'settled_at', 'cancelled_at'],
+  // P10-S1 (0012 §37): the R4 ruling widened the approved placements grant by
+  // exactly payload_type, protected_resource_id, and departure_interval_seconds.
+  // The matrix stays EXACT — any other granted column still fails this walk.
+  placements: ['id', 'sender_self_id', 'artifact_id', 'payload_type', 'protected_resource_id', 'state', 'created_at', 'departing_at', 'settled_at', 'cancelled_at', 'departure_interval_seconds'],
   placement_recipients: ['placement_id', 'recipient_self_id', 'added_at'],
 };
 // Tables selves_app must hold NOTHING on.

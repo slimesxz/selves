@@ -154,16 +154,18 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
   const establishContext = (tx: Tx, ctx: ActingContext): Promise<unknown> =>
     tx.query('SELECT domain.set_acting_self($1, $2)', [ctx.sessionToken, ctx.actingSelf]);
 
+  // P10-M1: the allow ground reaches the Stage-3 read so the repo can select
+  // the ground-conditional projection (author vs recipient column list).
   const readSingle = async <T>(
     operation: string,
     tx: Tx,
     decide: () => Promise<Outcome<string>>,
-    read: () => Promise<T | null>,
+    read: (ground: string) => Promise<T | null>,
   ): Promise<Visible<T>> => {
     const outcome = await decide();
     sink.onDecision(operation, outcome);
     if (!isAllow(outcome)) return { ok: false };
-    const value = await read();
+    const value = await read(outcome.ground);
     if (value === null) return { ok: false }; // defensive; an allow implies present
     return { ok: true, value };
   };
@@ -188,7 +190,7 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
           'readPlacement',
           tx,
           async () => decidePlacement(await predicates.placementFacts(tx, ctx.actingSelf, placementId), ctx.actingSelf),
-          () => domain.readPlacement(tx, placementId),
+          (ground) => domain.readPlacement(tx, placementId, ground as 'AUTHOR' | 'RECIPIENT_SETTLED'),
         );
       });
     },

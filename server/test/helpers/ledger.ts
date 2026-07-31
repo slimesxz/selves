@@ -45,9 +45,9 @@ export function recordingDomain(real: DomainRepo, l: Ledger): DomainRepo {
       ev.push('protected-result-query');
       return v;
     },
-    async readPlacement(tx, id) {
+    async readPlacement(tx, id, ground) {
       ev.push('protected-repo-entry');
-      const v = await real.readPlacement(tx, id);
+      const v = await real.readPlacement(tx, id, ground);
       ev.push('protected-result-query');
       return v;
     },

@@ -45,11 +45,22 @@ export interface Placement {
   // resource rather than a content Artifact (decision 0007, R2). Non-null for the
   // text payload.
   artifactId: ArtifactId | null;
+  // R4 read-shape fields (decision 0012 §35 ruling 1): descriptive mirrors of
+  // existing columns, exposed only on a placement the actor may already read.
+  payloadType: ArtifactPayloadType;
+  // The exact protected Artifact of a Key Placement (0007 R2) — the R8 revoke
+  // address (P10-M2). Null for the text payload.
+  protectedResourceId: ArtifactId | null;
   state: PlacementState;
   createdAt: Date;
   departingAt: Date | null;
   settledAt: Date | null;
   cancelledAt: Date | null;
+  // Three states (0012 §35 F3), so absence means exactly one thing:
+  //   absent — the actor is not the author (recipient projection omits the key);
+  //   null   — author, not yet departed (no snapshot exists);
+  //   number — author, snapshotted at departure.
+  departureIntervalSeconds?: number | null;
 }
 
 // Recipients are explicit rows — never a Ring or a Zone (AGENTS.md §3.7).

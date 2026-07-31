@@ -14,8 +14,15 @@ import type { PlacementState } from '@selves/domain';
 export interface DomainRepo {
   /** Stage-3 read of an artifact by id (caller must already hold an allow). */
   readArtifact(tx: Tx, artifactId: string): Promise<Artifact | null>;
-  /** Stage-3 read of a placement by id (caller must already hold an allow). */
-  readPlacement(tx: Tx, placementId: string): Promise<Placement | null>;
+  /** Stage-3 read of a placement by id (caller must already hold an allow).
+   *  P10-M1 ground-conditional projection: the AUTHOR ground's SELECT names
+   *  departure_interval_seconds; the RECIPIENT_SETTLED ground's SELECT does not.
+   *  The value is never fetched then stripped. */
+  readPlacement(
+    tx: Tx,
+    placementId: string,
+    ground: 'AUTHOR' | 'RECIPIENT_SETTLED',
+  ): Promise<Placement | null>;
   /** Containment: the acting Self's own authored artifacts. */
   listOwnedArtifacts(tx: Tx, actingSelf: string): Promise<Artifact[]>;
   /** Containment: authored (any state) ∪ settled placements addressed to the actor. */
@@ -42,11 +49,16 @@ type PlacementRow = {
   id: string;
   sender_self_id: string;
   artifact_id: string | null; // null for a Key Placement (decision 0007, R2)
+  payload_type: string;
+  protected_resource_id: string | null;
   state: string;
   created_at: Date;
   departing_at: Date | null;
   settled_at: Date | null;
   cancelled_at: Date | null;
+  // Present ONLY when the author column list was selected (P10-M1); the
+  // recipient SQL never names the column, so the property never exists there.
+  departure_interval_seconds?: number | null;
 };
 type RecipientRow = {
   placement_id: string;
@@ -64,16 +76,26 @@ function toArtifact(r: ArtifactRow): Artifact {
   };
 }
 function toPlacement(r: PlacementRow): Placement {
-  return {
+  const p: Placement = {
     id: r.id as PlacementId,
     senderSelfId: r.sender_self_id as SelfId,
     artifactId: r.artifact_id === null ? null : (r.artifact_id as ArtifactId),
+    payloadType: r.payload_type as ArtifactPayloadType,
+    protectedResourceId:
+      r.protected_resource_id === null ? null : (r.protected_resource_id as ArtifactId),
     state: r.state as PlacementState,
     createdAt: r.created_at,
     departingAt: r.departing_at,
     settledAt: r.settled_at,
     cancelledAt: r.cancelled_at,
   };
+  // F3 three-state shape: the key exists exactly when the author SQL selected
+  // the column (null until departure snapshots it); the recipient row never
+  // carries the property because its SQL never named the column.
+  if ('departure_interval_seconds' in r) {
+    p.departureIntervalSeconds = r.departure_interval_seconds ?? null;
+  }
+  return p;
 }
 function toRecipient(r: RecipientRow): PlacementRecipient {
   return {
@@ -84,8 +106,17 @@ function toRecipient(r: RecipientRow): PlacementRecipient {
 }
 
 const ARTIFACT_COLS = 'id, author_self_id, payload_type, text_body, created_at';
-const PLACEMENT_COLS =
-  'id, sender_self_id, artifact_id, state, created_at, departing_at, settled_at, cancelled_at';
+// P10-M1 ground-conditional column lists (exported for the S1 static proof).
+// Each is a COMPLETE, INDEPENDENT plain string literal (0012 §36 source-shape
+// ruling; 0008 F3): neither is constructed from the other and neither nests
+// interpolation. The recipient list NEVER names departure_interval_seconds;
+// the author list is the recipient list plus exactly that column — a
+// relationship asserted in tests, never implemented by construction. Never
+// fetch-then-strip.
+export const PLACEMENT_COLS_RECIPIENT =
+  'id, sender_self_id, artifact_id, payload_type, protected_resource_id, state, created_at, departing_at, settled_at, cancelled_at';
+export const PLACEMENT_COLS_AUTHOR =
+  'id, sender_self_id, artifact_id, payload_type, protected_resource_id, state, created_at, departing_at, settled_at, cancelled_at, departure_interval_seconds';
 
 /** The PostgreSQL implementation. Single-resource reads are Stage-3 (allow-gated
  *  by the service); list reads compile authorization into the WHERE clause and
@@ -100,9 +131,20 @@ export function createDomainRepo(): DomainRepo {
       return rows[0] ? toArtifact(rows[0]) : null;
     },
 
-    async readPlacement(tx, placementId) {
+    async readPlacement(tx, placementId, ground) {
+      // P10-M1: two fixed SQL texts, one per ground; the RECIPIENT_SETTLED text
+      // never names the interval column. Explicit branches interpolate their own
+      // named static constant directly — no intermediate selector variable
+      // (0008 F3; 0012 §36 source-shape ruling).
+      if (ground === 'AUTHOR') {
+        const { rows } = await tx.query<PlacementRow>(
+          `SELECT ${PLACEMENT_COLS_AUTHOR} FROM public.placements WHERE id = $1`,
+          [placementId],
+        );
+        return rows[0] ? toPlacement(rows[0]) : null;
+      }
       const { rows } = await tx.query<PlacementRow>(
-        `SELECT ${PLACEMENT_COLS} FROM public.placements WHERE id = $1`,
+        `SELECT ${PLACEMENT_COLS_RECIPIENT} FROM public.placements WHERE id = $1`,
         [placementId],
       );
       return rows[0] ? toPlacement(rows[0]) : null;
@@ -121,13 +163,30 @@ export function createDomainRepo(): DomainRepo {
     async listReadablePlacements(_tx, _actingSelf) {
       // P8 I: authorization is enforced by RLS on public.placements — author (any
       // state) ∪ (settled ∧ explicit recipient), keyed on the established acting-Self
-      // context. The query is UNFILTERED fixed SQL: an inline recipient subquery here
-      // would be evaluated with the invoking role's privileges and blocked by
-      // placement_recipients' author-only RLS (it would drop the actor's OWN settled
-      // placements), whereas the placements policy resolves the recipient ground via
-      // the owner-run helper. Relying on RLS yields exactly the readable set.
-      const { rows } = await _tx.query<PlacementRow>(
-        `SELECT ${PLACEMENT_COLS} FROM public.placements ORDER BY created_at, id`,
+      // context. RLS REMAINS THE BOUNDARY (0012 §35 F2): the two fixed-SQL queries
+      // below narrow WITHIN the RLS-produced readable set by ground and are not the
+      // authorization; absent/invalid context each reads zero rows.
+      //
+      // P10-M1 two-SELECT split (0012 §35 ruling 5): the authored query names the
+      // interval column; the received query's SQL text never does. F1: a
+      // self-addressed placement satisfies both grounds — AUTHOR precedence is
+      // structural, because the received query EXCLUDES rows the actor authored,
+      // so such a placement appears exactly once, under the author column list.
+      // Ground membership is resolved in-database via domain.current_acting_self()
+      // (the C3 context); no caller-supplied authority reaches the WHERE.
+      const authored = await _tx.query<PlacementRow>(
+        `SELECT ${PLACEMENT_COLS_AUTHOR} FROM public.placements
+          WHERE sender_self_id = domain.current_acting_self()`,
+      );
+      const received = await _tx.query<PlacementRow>(
+        `SELECT ${PLACEMENT_COLS_RECIPIENT} FROM public.placements
+          WHERE sender_self_id IS DISTINCT FROM domain.current_acting_self()`,
+      );
+      // Deterministic contract ordering by (created_at, id) — 0012 §35 ruling 2.
+      const rows = [...authored.rows, ...received.rows].sort(
+        (a, b) =>
+          a.created_at.getTime() - b.created_at.getTime() ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
       return rows.map(toPlacement);
     },

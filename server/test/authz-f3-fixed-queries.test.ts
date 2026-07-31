@@ -22,8 +22,15 @@ const read = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');
 describe('P8 F3 — fixed-query source invariant', () => {
   // The ONLY module that issues direct SQL against a policed table (artifacts,
   // placements, placement_recipients) as selves_app. Its only template
-  // interpolations are two STATIC column-list constants — never a dynamic value.
-  const ALLOWED_INTERPOLATIONS = new Set(['ARTIFACT_COLS', 'PLACEMENT_COLS']);
+  // interpolations are three STATIC column-list constants — never a dynamic
+  // value (P10-S1 / 0012 §36: the placement list split into ground-conditional
+  // author and recipient constants; a `${cols}` selector remains rejected by
+  // this exact allow-list).
+  const ALLOWED_INTERPOLATIONS = new Set([
+    'ARTIFACT_COLS',
+    'PLACEMENT_COLS_AUTHOR',
+    'PLACEMENT_COLS_RECIPIENT',
+  ]);
 
   it('domain.repo.ts interpolates only static column-list constants into SQL', () => {
     const src = read('authz/domain.repo.ts');
@@ -33,6 +40,8 @@ describe('P8 F3 — fixed-query source invariant', () => {
     for (const t of tokens) {
       expect(ALLOWED_INTERPOLATIONS.has(t), `interpolated token ${t} must be a static column-list constant`).toBe(true);
     }
+    // the dynamic-selector shape is rejected by name as well as by the allow-list
+    expect(tokens.includes('cols'), 'no ${cols} dynamic column selector').toBe(false);
     // the interpolated constants are themselves plain string literals (no nested
     // interpolation could smuggle a dynamic fragment through them)
     for (const name of ALLOWED_INTERPOLATIONS) {
@@ -54,8 +63,10 @@ describe('P8 F3 — fixed-query source invariant', () => {
 
   it('every policed-table query compares bound parameters by equality (no interpolated predicate)', () => {
     const src = read('authz/domain.repo.ts');
-    // Each remaining WHERE fragment against a policed column is "<col> = $N" — bound,
-    // equality. (listReadablePlacements now carries no WHERE: RLS filters it.)
+    // Each bound-parameter WHERE fragment against a policed column is "<col> = $N" —
+    // bound, equality. (listReadablePlacements narrows by ground via fixed
+    // comparisons to domain.current_acting_self() WITHIN RLS — fixed SQL, no
+    // bound parameter, no user input; RLS remains the boundary.)
     for (const frag of ['id = $1', 'author_self_id = $1', 'pr.placement_id = $1', 'p.sender_self_id = $2']) {
       expect(src.includes(frag), `expected bound equality fragment: ${frag}`).toBe(true);
     }
