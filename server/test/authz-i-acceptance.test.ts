@@ -241,9 +241,11 @@ describe('P8 I — credential-propagation leak audit', () => {
     expect(src).toContain("tx.query('SELECT domain.set_acting_self($1, $2)', [ctx.sessionToken, ctx.actingSelf])");
     // … and set_departure_interval passes it as a bind parameter to the account mutation.
     expect(src).toContain('mutations.setDepartureInterval(db, ctx.sessionToken, seconds)');
-    // Both value-uses of ctx.sessionToken are those bind-parameter passes — never interpolated.
+    // … and get_departure_interval (P10-S2) passes it identically to the account getter.
+    expect(src).toContain('mutations.getDepartureInterval(db, ctx.sessionToken)');
+    // All three value-uses of ctx.sessionToken are those bind-parameter passes — never interpolated.
     const valueUses = [...src.matchAll(/ctx\.sessionToken\b/g)].length;
-    expect(valueUses, 'ctx.sessionToken used only at the two bind-parameter sites').toBe(2);
+    expect(valueUses, 'ctx.sessionToken used only at the three bind-parameter sites').toBe(3);
     expect(/\$\{[^}]*sessionToken[^}]*\}/.test(src), 'sessionToken never interpolated into a template').toBe(false);
   });
 

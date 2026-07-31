@@ -77,6 +77,9 @@ export interface AuthorizationService {
   settlePlacement(ctx: ActingContext, placementId: string): Promise<void>;
   // Account-scoped (NOT acting-Self-bound): authority is the authenticated account.
   setDepartureInterval(ctx: AccountContext, seconds: number): Promise<void>;
+  // Account-scoped getter (R4 item 4): the same AccountContext authority class
+  // as the setter — structurally incapable of receiving an acting Self.
+  getDepartureInterval(ctx: AccountContext): Promise<number>;
 
   // ── Phase-7 Key lifecycle (decision 0007) ───────────────────────────────────
   // A Key is a capability payload carried by a Placement (Q1 Alt A). Opening a Key
@@ -270,6 +273,9 @@ export function createAuthorizationService(deps: ServiceDeps): AuthorizationServ
     // Account-scoped and Self-INDEPENDENT (P8 L / 8-C §5): a single autocommit
     // statement carrying the session token; the DEFINER function derives the
     // account from the session. No acting-Self context is established.
+    getDepartureInterval(ctx) {
+      return mutations.getDepartureInterval(db, ctx.sessionToken);
+    },
     setDepartureInterval(ctx, seconds) {
       return mutations.setDepartureInterval(db, ctx.sessionToken, seconds);
     },

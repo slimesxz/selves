@@ -36,6 +36,9 @@ export interface MutationsRepo {
    *  Self-independent: the DEFINER function derives the account from the session
    *  token hash. No acting Self is involved. */
   setDepartureInterval(q: Queryable, sessionTokenHash: Buffer, seconds: number): Promise<void>;
+  /** Account-bound getter (R4 item 4): the mirror of the setter's authority
+   *  class — session-derived account, no acting Self, no authority id. */
+  getDepartureInterval(q: Queryable, sessionTokenHash: Buffer): Promise<number>;
   /** Open a Key transmission over the exact protected Artifact (C3 acting Self must
    *  author it). Returns its id. */
   createKeyPlacementDraft(q: Queryable, protectedResourceId: string): Promise<string>;
@@ -76,6 +79,13 @@ export function createMutationsRepo(): MutationsRepo {
       await q.query('SELECT domain.settle_placement($1)', [placementId]);
     },
 
+    async getDepartureInterval(q, sessionTokenHash) {
+      const { rows } = await q.query<{ seconds: number }>(
+        'SELECT domain.get_departure_interval($1) AS seconds',
+        [sessionTokenHash],
+      );
+      return rows[0]!.seconds;
+    },
     async setDepartureInterval(q, sessionTokenHash, seconds) {
       await q.query('SELECT domain.set_departure_interval($1, $2)', [sessionTokenHash, seconds]);
     },
