@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { addSelf } from '../src/operator/commands.ts';
 import { appTestPool, bootstrapPool, enroll, sha256, superuserPool } from './helpers/auth.ts';
+import { connect, race } from './helpers/race.ts';
 
 let boot: pg.Pool;
 let su: pg.Pool;
@@ -110,6 +111,39 @@ describe('P10-S5 operator add-self provisioning', () => {
     await expect(
       app.query('SELECT auth.add_self($1, $2, $3)', [randomUUID(), 2, 'x']),
     ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  // P10-S6 (0012 §40): the executed concurrent proof. The settled-state case
+  // above proves the occupied contract; this proves the RACE — two callers
+  // competing for the same previously free coordinate. race() holds the first
+  // INSERT uncommitted and does not release it until the second is OBSERVED
+  // waiting on a Lock, so contention is established, not inferred: no sleep,
+  // no timing threshold, and no sampled wait-event string is asserted here.
+  it('two concurrent add_self calls for the same free slot: one wins with its id and name, the other receives PT409, and exactly one row survives', async () => {
+    const e = await enroll(boot); // slot 1 occupied by enrollment; slot 2 free
+    expect((await slotsOf(e.accountId)).map((r) => r.self_slot)).toEqual([1]);
+    const holder = await connect(process.env.TEST_BOOTSTRAP_DATABASE_URL);
+    const racer = await connect(process.env.TEST_BOOTSTRAP_DATABASE_URL);
+    const probe = await connect(process.env.TEST_DATABASE_URL);
+    try {
+      const out = await race(
+        { client: holder, sql: 'SELECT auth.add_self($1, $2, $3) AS id', params: [e.accountId, 2, 'holder'] },
+        { client: racer, sql: 'SELECT auth.add_self($1, $2, $3) AS id', params: [e.accountId, 2, 'racer'] },
+        probe,
+      );
+      const winnerId = (out.holdRows[0] as { id: string }).id;
+      expect(winnerId).toMatch(/^[0-9a-f-]{36}$/); // the holder succeeded with an id
+      expect(out.racer.errCode).toBe('PT409'); // the racer lost the coordinate
+      expect(out.racer.ok).toBeUndefined();
+      const rows = await slotsOf(e.accountId);
+      const atSlotTwo = rows.filter((r) => r.self_slot === 2);
+      expect(atSlotTwo).toHaveLength(1); // exactly one row occupies the slot
+      expect(atSlotTwo[0]!.id).toBe(winnerId); // it is the holder's row
+      expect(atSlotTwo[0]!.name).toBe('holder'); // unmodified by the loser
+      expect(rows.map((r) => r.self_slot)).toEqual([1, 2]); // no duplicate coordinate
+    } finally {
+      await Promise.all([holder.end(), racer.end(), probe.end()]);
+    }
   });
 
   it('schema constraints own validity: out-of-range slot and blank name fail at the database, and three occupied slots leave no fourth legal coordinate', async () => {
