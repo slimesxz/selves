@@ -10,7 +10,7 @@
 // ambiguous or display-failed enrollment can be recovered deterministically.
 import { parseArgs } from 'node:util';
 import pg from 'pg';
-import { containAccount, enrollAccount, recoverEnrollment, rotateCredential } from './commands.ts';
+import { addSelf, containAccount, enrollAccount, recoverEnrollment, rotateCredential } from './commands.ts';
 
 function fail(msg: string): never {
   process.stderr.write(msg + '\n');
@@ -71,6 +71,42 @@ async function cmdEnroll(argv: string[]): Promise<void> {
           `  operator recover --account ${r.accountRef}\n` +
           `  -> "recovered" means it committed (a fresh secret is issued); "not committed" means no account exists.`,
         );
+        break;
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+// P10-S5 (0012 §39): provision an additional Self at an operator-named slot on
+// an EXISTING account. Slot is explicit — no lowest-free discovery — and range
+// validity stays with the database (selves_slot_range), as does name presence.
+async function cmdAddSelf(argv: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args: argv,
+    options: { account: { type: 'string' }, slot: { type: 'string' }, name: { type: 'string' } },
+  });
+  const account = values.account;
+  const slotText = values.slot;
+  const name = values.name;
+  if (!account || !slotText || !name) fail('usage: add-self --account <uuid> --slot <n> --name <name>');
+  const slot = Number.parseInt(slotText, 10);
+  if (!Number.isInteger(slot)) fail('usage: add-self --account <uuid> --slot <n> --name <name>');
+  const db = pool('BOOTSTRAP_DATABASE_URL');
+  try {
+    const r = await addSelf(db, { account, slot, name });
+    switch (r.status) {
+      case 'added':
+        out(`self: ${r.selfId}`);
+        break;
+      case 'not_found':
+        fail(`no such account ${account}; nothing was created.`);
+        break;
+      case 'slot_occupied':
+        fail(`slot ${slot} is already occupied on account ${account}; the existing Self was not modified.`);
+        break;
+      case 'error':
+        fail(`add-self failed${r.sqlstate ? ` (SQLSTATE ${r.sqlstate})` : ''}; nothing was created.`);
         break;
     }
   } finally {
@@ -164,10 +200,11 @@ async function cmdContain(argv: string[]): Promise<void> {
 const [sub, ...rest] = process.argv.slice(2);
 const dispatch: Record<string, (argv: string[]) => Promise<void>> = {
   enroll: cmdEnroll,
+  'add-self': cmdAddSelf,
   rotate: cmdRotate,
   recover: cmdRecover,
   contain: cmdContain,
 };
 const handler = sub ? dispatch[sub] : undefined;
-if (!handler) fail('usage: operator <enroll|rotate|recover|contain> [options]');
+if (!handler) fail('usage: operator <enroll|add-self|rotate|recover|contain> [options]');
 await handler(rest);

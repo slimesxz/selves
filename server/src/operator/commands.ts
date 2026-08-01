@@ -44,6 +44,35 @@ export async function enrollAccount(db: Queryable, opts: { accountRef: string; n
   }
 }
 
+// ── add-self (P10-S5 operator provisioning; 0012 §39) ────────────────────────
+// Trusted operator tooling only: the authoritative write is the ratified
+// auth.add_self DEFINER function — never a direct INSERT here, and never over
+// selves_app credentials. Slot validity and name presence stay schema-owned;
+// this layer parses and passes through, and maps only the two ruled classes.
+export type AddSelfResult =
+  | { status: 'added'; selfId: string }
+  | { status: 'not_found' }      // PT404: no such account (never created here)
+  | { status: 'slot_occupied' }  // PT409: incumbent Self untouched
+  | { status: 'error'; sqlstate?: string };
+
+export async function addSelf(
+  db: Queryable,
+  opts: { account: string; slot: number; name: string },
+): Promise<AddSelfResult> {
+  try {
+    const { rows } = await db.query<{ id: string }>(
+      'SELECT auth.add_self($1, $2, $3) AS id',
+      [opts.account, opts.slot, opts.name],
+    );
+    return { status: 'added', selfId: rows[0]!.id };
+  } catch (err) {
+    const s = sqlstate(err);
+    if (s === 'PT404') return { status: 'not_found' };
+    if (s === 'PT409') return { status: 'slot_occupied' };
+    return s ? { status: 'error', sqlstate: s } : { status: 'error' };
+  }
+}
+
 // ── rotate (compare-and-swap) ────────────────────────────────────────────────
 export type RotateResult =
   | { status: 'rotated'; credentialId: string; secret: string }

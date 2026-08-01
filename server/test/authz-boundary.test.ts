@@ -17,6 +17,7 @@ const FUNCS: Record<string, { sql: string; params: unknown[]; approved: string }
   issue_session: { sql: 'SELECT auth.issue_session($1,$2)', params: [B32, B32], approved: 'selves_app' },
   revoke_session: { sql: 'SELECT auth.revoke_session($1)', params: [B32], approved: 'selves_app' },
   enroll_account: { sql: 'SELECT auth.enroll_account($1,$2,$3)', params: [UUID, 'n', B32], approved: 'selves_bootstrap' },
+  add_self: { sql: 'SELECT auth.add_self($1,$2,$3)', params: [UUID, 2, 'n'], approved: 'selves_bootstrap' },
   rotate_credential: { sql: 'SELECT auth.rotate_credential($1,$2,$3)', params: [UUID, UUID, B32], approved: 'selves_bootstrap' },
   disable_credential: { sql: 'SELECT auth.disable_credential($1)', params: [UUID], approved: 'selves_bootstrap' },
   recover_enrollment_credential: { sql: 'SELECT auth.recover_enrollment_credential($1,$2)', params: [UUID, B32], approved: 'selves_bootstrap' },

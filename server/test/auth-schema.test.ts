@@ -14,6 +14,7 @@ const CALLABLE: Record<string, string> = {
   'auth.issue_session(bytea,bytea)': 'selves_app',
   'auth.revoke_session(bytea)': 'selves_app',
   'auth.enroll_account(uuid,text,bytea)': 'selves_bootstrap',
+  'auth.add_self(uuid,smallint,text)': 'selves_bootstrap',
   'auth.rotate_credential(uuid,uuid,bytea)': 'selves_bootstrap',
   'auth.disable_credential(uuid)': 'selves_bootstrap',
   'auth.recover_enrollment_credential(uuid,bytea)': 'selves_bootstrap',
@@ -62,13 +63,13 @@ describe('P4-B auth schema inventory', () => {
     ]);
   });
 
-  it('has exactly the eleven functions: 8 DEFINER + 3 INVOKER triggers, all search_path="" owned by selves_owner', async () => {
+  it('has exactly the twelve functions: 9 DEFINER + 3 INVOKER triggers, all search_path="" owned by selves_owner', async () => {
     const { rows } = await su.query(
       `SELECT p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') AS cfg,
               pg_get_userbyid(p.proowner) AS owner
        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auth' ORDER BY 1`,
     );
-    expect(rows.length).toBe(11);
+    expect(rows.length).toBe(12);
     for (const r of rows) {
       expect(r.owner, `${r.proname} owner`).toBe('selves_owner');
       expect(r.cfg, `${r.proname} search_path`).toBe('search_path=""');
@@ -76,7 +77,7 @@ describe('P4-B auth schema inventory', () => {
     const definer = rows.filter((r) => r.prosecdef).map((r) => r.proname).sort();
     const invoker = rows.filter((r) => !r.prosecdef).map((r) => r.proname).sort();
     expect(definer).toEqual([
-      'authenticate_session', 'contain_account', 'disable_credential', 'enroll_account',
+      'add_self', 'authenticate_session', 'contain_account', 'disable_credential', 'enroll_account',
       'issue_session', 'recover_enrollment_credential', 'revoke_session', 'rotate_credential',
     ]);
     expect(invoker).toEqual([
