@@ -20,6 +20,9 @@ import { useEffect, useState } from 'react';
 import { sendAccount, type Transport } from './api/transport.ts';
 import AuthGate from './auth/AuthGate.tsx';
 import { outcomeOf, presentsGate, type Outcome } from './auth/session.ts';
+import Correspondences from './correspondences/Correspondences.tsx';
+import { readCorrespondences } from './correspondences/read.ts';
+import { onContinue, onReadResolved, onReturn, prismSurface, type Surface } from './correspondences/surface.ts';
 import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
 import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
@@ -40,6 +43,7 @@ export default function App() {
   const [selves, setSelves] = useState<SelfSummary[]>([]);
   const [activeSelfId, setActiveSelfId] = useState<string | null>(null);
   const [artifactCount, setArtifactCount] = useState<number | null>(null);
+  const [surface, setSurface] = useState<Surface>(prismSurface);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +97,39 @@ export default function App() {
     };
   }, [activeSelfId]);
 
+  // Continue's first behavior (P10-S12): the all-or-none Correspondences read
+  // runs when — and only when — the surface has just been opened and its state
+  // is still pending. One attempt per deliberate human act. Never on focus, on
+  // an interval, by polling, by background refresh, or automatically retried;
+  // returning to the Prism floor and activating Continue again is the ruled
+  // re-attempt path.
+  useEffect(() => {
+    if (surface.kind !== 'correspondences' || surface.state.kind !== 'pending') return;
+    if (activeSelfId === null) return;
+    let cancelled = false;
+    void (async () => {
+      const read = await readCorrespondences(browserTransport, activeSelfId);
+      if (cancelled) return;
+      // 401 and 403 are not unavailability: they belong to the existing
+      // session-expired and forbidden transitions.
+      if (read.kind === 'session-expired') {
+        onSessionExpired(sessionStorageOrNull());
+        setOutcome({ kind: 'unauthenticated' });
+        setSurface(onReturn());
+        return;
+      }
+      if (read.kind === 'forbidden') {
+        setActiveSelfId(null);
+        setSurface(onReturn());
+        return;
+      }
+      setSurface({ kind: 'correspondences', state: onReadResolved(read, activeSelfId, selves) });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [surface, activeSelfId, selves]);
+
   if (outcome !== null && presentsGate(outcome)) {
     return <AuthGate transport={browserTransport} onAuthenticated={() => setOutcome({ kind: 'ok' })} />;
   }
@@ -109,8 +146,19 @@ export default function App() {
     );
   }
 
+  if (surface.kind === 'correspondences') {
+    return <Correspondences state={surface.state} onReturn={() => setSurface(onReturn())} />;
+  }
+
   if (presentsFloor({ activeSelfId, artifactCount })) {
-    return <PrismFloor selves={selves} activeSelfId={activeSelfId!} artifactCount={artifactCount!} />;
+    return (
+      <PrismFloor
+        selves={selves}
+        activeSelfId={activeSelfId!}
+        artifactCount={artifactCount!}
+        onContinue={() => setSurface(onContinue())}
+      />
+    );
   }
 
   return <main />;

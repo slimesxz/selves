@@ -82,7 +82,7 @@ describe('P10-S11 corrective — unknown count releases the active Self', () => 
     expect(onCountRequested('self-a').artifactCount).toBeNull();
   });
 
-  it('the correction introduces no polling, interval, focus refetch, background refresh, routing, or Continue handler', () => {
+  it('the correction introduces no polling, interval, focus refetch, background refresh, or routing', () => {
     const changed = ['App.tsx', 'prism/state.ts', 'prism/count.ts', 'prism/floor.ts', 'prism/PrismFloor.tsx'];
     for (const rel of changed) {
       const code = codeOf(rel);
@@ -99,10 +99,11 @@ describe('P10-S11 corrective — unknown count releases the active Self', () => 
         expect(code.includes(construct), `${rel} must not use ${construct}`).toBe(false);
       }
     }
-    // Continue renders as an element and acquires no handler.
-    const floor = codeOf('prism/PrismFloor.tsx');
-    expect(floor).toContain('<button key="continue" type="button">');
-    expect(floor.includes('onClick'), 'Continue must carry no handler').toBe(false);
+    // P10-Q4 compatibility edit (P10-S12): the two assertions requiring Continue
+    // to carry no handler are removed. They proved P10-S11, whose no-handler
+    // rule §13.6 expressly bounded to that sub-step; P10-S12 is the sub-step in
+    // which Continue gains its first behavior. Every other assertion here is
+    // unchanged and none is weakened.
     // The count request is issued from the effect path only — one call site.
     expect([...codeOf('App.tsx').matchAll(/fetchArtifactCount\(/g)]).toHaveLength(1);
   });
