@@ -11,7 +11,14 @@
 // The request is Self-scoped and carries the verified active Self. It reaches
 // the frozen `GET /artifacts` surface; the count is the length of the returned
 // owned-artifact array, and no count route exists or is invented.
+//
+// P10-S12.1 — a Self-scoped 401 and 403 are authorization transitions, not
+// unknown counts. This read previously collapsed every non-2xx response into
+// null, so a 403 became an unknown count and a 401 never reached the gate. The
+// classification now runs through the existing `outcomeOf`, which is the
+// committed 401/403 separation (P10-M6); no second mapping is defined here.
 
+import { outcomeOf } from '../auth/session.ts';
 import { buildSelfRequest, sendSelf, type BuiltRequest, type Transport } from '../api/transport.ts';
 
 export const ARTIFACT_COUNT_PATH = '/artifacts';
@@ -20,24 +27,37 @@ export function buildArtifactCountRequest(activeSelfId: string): BuiltRequest {
   return buildSelfRequest({ method: 'GET', path: ARTIFACT_COUNT_PATH, actingSelf: activeSelfId });
 }
 
-/** Returns the authoritative count, or null when no authoritative answer was
- *  obtained. Null is not zero: a zero is an authoritative fact and renders as
- *  0, whereas null means the count is unknown and the floor is not derived
- *  from it. Nothing is substituted for an unknown count. */
+/** The four outcomes of the count read, kept distinct because they are four
+ *  different facts. `count` is authoritative and includes zero. `unknown` is a
+ *  non-auth failure and is not zero: nothing is substituted for it. The two
+ *  authorization outcomes are not unknown counts and never render as one. */
+export type CountOutcome =
+  | { readonly kind: 'count'; readonly count: number }
+  | { readonly kind: 'unknown' }
+  | { readonly kind: 'session-expired' }
+  | { readonly kind: 'forbidden' };
+
+const UNKNOWN: CountOutcome = { kind: 'unknown' };
+
 export async function fetchArtifactCount(
   transport: Transport,
   activeSelfId: string,
-): Promise<number | null> {
+): Promise<CountOutcome> {
   try {
     const res = await sendSelf(transport, {
       method: 'GET',
       path: ARTIFACT_COUNT_PATH,
       actingSelf: activeSelfId,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const outcome = outcomeOf(res.status);
+      if (outcome.kind === 'unauthenticated') return { kind: 'session-expired' };
+      if (outcome.kind === 'forbidden') return { kind: 'forbidden' };
+      return UNKNOWN;
+    }
     const body: unknown = await res.json();
-    return Array.isArray(body) ? body.length : null;
+    return Array.isArray(body) ? { kind: 'count', count: body.length } : UNKNOWN;
   } catch {
-    return null;
+    return UNKNOWN;
   }
 }

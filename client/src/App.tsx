@@ -16,7 +16,15 @@
 // count is known. Until then, and where no authoritative count is obtained, it
 // renders nothing: the honest absence of a surface, not a designed empty state
 // and not a placeholder (P10-C2). Nothing is substituted for an unknown count.
-import { useEffect, useState } from 'react';
+//
+// P10-S12.1 — a Self-scoped 401 or 403 has one meaning and one disposition,
+// whichever read produced it. Every 403 from every Self-scoped read reaches the
+// single `forbidden` call site below, which is `onForbidden` and nothing
+// resembling it; every 401 reaches `onSessionExpired` and the gate. A surface
+// decides what it renders afterwards. It does not decide whether the active
+// Self is forgotten, whether the persisted id survives, or whether
+// re-verification happens.
+import { useCallback, useEffect, useState } from 'react';
 import { sendAccount, type Transport } from './api/transport.ts';
 import AuthGate from './auth/AuthGate.tsx';
 import { outcomeOf, presentsGate, type Outcome } from './auth/session.ts';
@@ -27,6 +35,7 @@ import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
 import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
 import {
+  onForbidden,
   onSessionExpired,
   presentsSelection,
   remember,
@@ -72,6 +81,36 @@ export default function App() {
     };
   }, []);
 
+  // 401 — the session is no longer valid. One disposition, whichever read
+  // produced it: discard the assertion and present the gate (R2, P10-M5).
+  const sessionExpired = useCallback(() => {
+    onSessionExpired(sessionStorageOrNull());
+    setActiveSelfId(null);
+    setOutcome({ kind: 'unauthenticated' });
+    setSurface(prismSurface);
+  }, []);
+
+  // 403 — a valid session asserting a Self it may no longer act as. R3's ruled
+  // transition: discard the persisted id and re-verify EXACTLY ONCE. Every
+  // Self-scoped read reaches this one call site; no surface approximates it.
+  const forbidden = useCallback(async () => {
+    const listed = await onForbidden(sessionStorageOrNull(), async () => {
+      const res = await sendAccount(browserTransport, { method: 'GET', path: '/auth/selves' });
+      // The single re-verification may itself find no session. That is a 401
+      // and belongs to the 401 transition, never to a second forbidden pass.
+      if (outcomeOf(res.status).kind === 'unauthenticated') {
+        sessionExpired();
+        return [];
+      }
+      // A non-auth failure yields no list. There is no retry: onForbidden
+      // re-verifies once and returns whatever the one answer was.
+      return res.ok ? parseSelves(await res.json()) : [];
+    });
+    setSelves(listed);
+    setActiveSelfId(null);
+    setSurface(prismSurface);
+  }, [sessionExpired]);
+
   // The count is fetched when the Prism mounts for a VERIFIED active Self —
   // this effect runs only once activeSelfId holds a value that survived
   // restore's re-verification — and on explicit navigation to that surface.
@@ -84,18 +123,21 @@ export default function App() {
     // so one Self's fact cannot render beside another Self's name.
     setArtifactCount(onCountRequested(activeSelfId).artifactCount);
     void (async () => {
-      const count = await fetchArtifactCount(browserTransport, activeSelfId);
+      const outcome = await fetchArtifactCount(browserTransport, activeSelfId);
       if (cancelled) return;
+      // An authorization outcome is not an unknown count and never becomes one.
+      if (outcome.kind === 'session-expired') return sessionExpired();
+      if (outcome.kind === 'forbidden') return void forbidden();
       // Completion: an authoritative count is recorded; no authoritative count
       // releases the Self into selection. sessionStorage is not touched.
-      const next = onCountResolved(activeSelfId, count);
+      const next = onCountResolved(activeSelfId, outcome.kind === 'count' ? outcome.count : null);
       setActiveSelfId(next.activeSelfId);
       setArtifactCount(next.artifactCount);
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeSelfId]);
+  }, [activeSelfId, sessionExpired, forbidden]);
 
   // Continue's first behavior (P10-S12): the all-or-none Correspondences read
   // runs when — and only when — the surface has just been opened and its state
@@ -110,25 +152,16 @@ export default function App() {
     void (async () => {
       const read = await readCorrespondences(browserTransport, activeSelfId);
       if (cancelled) return;
-      // 401 and 403 are not unavailability: they belong to the existing
-      // session-expired and forbidden transitions.
-      if (read.kind === 'session-expired') {
-        onSessionExpired(sessionStorageOrNull());
-        setOutcome({ kind: 'unauthenticated' });
-        setSurface(onReturn());
-        return;
-      }
-      if (read.kind === 'forbidden') {
-        setActiveSelfId(null);
-        setSurface(onReturn());
-        return;
-      }
+      // 401 and 403 are not unavailability: they route to the same authoritative
+      // transitions every other Self-scoped read routes to (P10-S12.1).
+      if (read.kind === 'session-expired') return sessionExpired();
+      if (read.kind === 'forbidden') return void forbidden();
       setSurface({ kind: 'correspondences', state: onReadResolved(read, activeSelfId, selves) });
     })();
     return () => {
       cancelled = true;
     };
-  }, [surface, activeSelfId, selves]);
+  }, [surface, activeSelfId, selves, sessionExpired, forbidden]);
 
   if (outcome !== null && presentsGate(outcome)) {
     return <AuthGate transport={browserTransport} onAuthenticated={() => setOutcome({ kind: 'ok' })} />;

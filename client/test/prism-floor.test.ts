@@ -86,7 +86,7 @@ describe('P10-S11 Prism floor', () => {
     expect(other.value).toBe(active.value);
 
     // An unobtainable count is not a zero: nothing is substituted for it.
-    const failing: Transport = () => Promise.resolve(new Response(null, { status: 403 }));
-    expect(await fetchArtifactCount(failing, 'second')).toBeNull();
+    const failing: Transport = () => Promise.resolve(new Response(null, { status: 500 }));
+    expect(await fetchArtifactCount(failing, 'second')).toEqual({ kind: 'unknown' });
   });
 });
