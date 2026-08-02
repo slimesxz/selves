@@ -19,8 +19,9 @@
 //
 // P10-S12.1 — a Self-scoped 401 or 403 has one meaning and one disposition,
 // whichever read produced it. Every 403 from every Self-scoped read reaches the
-// single `forbidden` call site below, which is `onForbidden` and nothing
-// resembling it; every 401 reaches `onSessionExpired` and the gate. A surface
+// single `forbidden` call site below, which settles through `onForbidden` and
+// nothing resembling it; every 401 reaches `onSessionExpired` and the gate. A
+// surface
 // decides what it renders afterwards. It does not decide whether the active
 // Self is forgotten, whether the persisted id survives, or whether
 // re-verification happens.
@@ -35,13 +36,13 @@ import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
 import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
 import {
-  onForbidden,
   onSessionExpired,
   presentsSelection,
   remember,
   restore,
   sessionStorageOrNull,
 } from './self/active.ts';
+import { settleForbidden } from './self/forbidden.ts';
 import SelfSwitcher from './self/SelfSwitcher.tsx';
 import { parseSelves, type SelfSummary } from './self/selves.ts';
 
@@ -93,8 +94,14 @@ export default function App() {
   // 403 — a valid session asserting a Self it may no longer act as. R3's ruled
   // transition: discard the persisted id and re-verify EXACTLY ONCE. Every
   // Self-scoped read reaches this one call site; no surface approximates it.
+  //
+  // P10-S12.2 — settleForbidden does not reject, so the transition completes
+  // whether the one attempt returned a response or threw. Where it returns no
+  // authoritative list the shell has no surface to present: that empty result
+  // is a stated Phase-10 limitation, not a designed state, and nothing here
+  // manufactures an authentication failure to escape it.
   const forbidden = useCallback(async () => {
-    const listed = await onForbidden(sessionStorageOrNull(), async () => {
+    const settled = await settleForbidden(sessionStorageOrNull(), async () => {
       const res = await sendAccount(browserTransport, { method: 'GET', path: '/auth/selves' });
       // The single re-verification may itself find no session. That is a 401
       // and belongs to the 401 transition, never to a second forbidden pass.
@@ -106,9 +113,9 @@ export default function App() {
       // re-verifies once and returns whatever the one answer was.
       return res.ok ? parseSelves(await res.json()) : [];
     });
-    setSelves(listed);
-    setActiveSelfId(null);
-    setSurface(prismSurface);
+    setSelves(settled.selves);
+    setActiveSelfId(settled.activeSelfId);
+    setSurface(settled.surface);
   }, [sessionExpired]);
 
   // The count is fetched when the Prism mounts for a VERIFIED active Self —
