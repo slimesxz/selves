@@ -12,13 +12,16 @@
 // three-Self account. A restored choice is one the human already made in this
 // tab, and only after it re-verifies against the returned list.
 //
-// With a Self active there is no surface yet — the Prism floor is P10-S11 — so
-// the shell renders nothing. That is the honest absence of a surface, not a
-// designed empty state and not a placeholder (P10-C2).
+// With a Self active the shell presents the Prism floor once its authoritative
+// count is known. Until then, and where no authoritative count is obtained, it
+// renders nothing: the honest absence of a surface, not a designed empty state
+// and not a placeholder (P10-C2). Nothing is substituted for an unknown count.
 import { useEffect, useState } from 'react';
 import { sendAccount, type Transport } from './api/transport.ts';
 import AuthGate from './auth/AuthGate.tsx';
 import { outcomeOf, presentsGate, type Outcome } from './auth/session.ts';
+import { fetchArtifactCount } from './prism/count.ts';
+import PrismFloor from './prism/PrismFloor.tsx';
 import {
   onSessionExpired,
   presentsSelection,
@@ -35,6 +38,7 @@ export default function App() {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [selves, setSelves] = useState<SelfSummary[]>([]);
   const [activeSelfId, setActiveSelfId] = useState<string | null>(null);
+  const [artifactCount, setArtifactCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +67,23 @@ export default function App() {
     };
   }, []);
 
+  // The count is fetched when the Prism mounts for a VERIFIED active Self —
+  // this effect runs only once activeSelfId holds a value that survived
+  // restore's re-verification — and on explicit navigation to that surface.
+  // Never on focus, on an interval, by polling, by background refresh, or
+  // attached to the account-scoped /auth/selves request above.
+  useEffect(() => {
+    if (activeSelfId === null) return;
+    let cancelled = false;
+    void (async () => {
+      const count = await fetchArtifactCount(browserTransport, activeSelfId);
+      if (!cancelled) setArtifactCount(count);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSelfId]);
+
   if (outcome !== null && presentsGate(outcome)) {
     return <AuthGate transport={browserTransport} onAuthenticated={() => setOutcome({ kind: 'ok' })} />;
   }
@@ -77,6 +98,10 @@ export default function App() {
         }}
       />
     );
+  }
+
+  if (activeSelfId !== null && artifactCount !== null) {
+    return <PrismFloor selves={selves} activeSelfId={activeSelfId} artifactCount={artifactCount} />;
   }
 
   return <main />;
