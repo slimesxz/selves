@@ -22,6 +22,7 @@ import AuthGate from './auth/AuthGate.tsx';
 import { outcomeOf, presentsGate, type Outcome } from './auth/session.ts';
 import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
+import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
 import {
   onSessionExpired,
   presentsSelection,
@@ -75,9 +76,17 @@ export default function App() {
   useEffect(() => {
     if (activeSelfId === null) return;
     let cancelled = false;
+    // Start of request: clear any count retained from a previously active Self,
+    // so one Self's fact cannot render beside another Self's name.
+    setArtifactCount(onCountRequested(activeSelfId).artifactCount);
     void (async () => {
       const count = await fetchArtifactCount(browserTransport, activeSelfId);
-      if (!cancelled) setArtifactCount(count);
+      if (cancelled) return;
+      // Completion: an authoritative count is recorded; no authoritative count
+      // releases the Self into selection. sessionStorage is not touched.
+      const next = onCountResolved(activeSelfId, count);
+      setActiveSelfId(next.activeSelfId);
+      setArtifactCount(next.artifactCount);
     })();
     return () => {
       cancelled = true;
@@ -100,8 +109,8 @@ export default function App() {
     );
   }
 
-  if (activeSelfId !== null && artifactCount !== null) {
-    return <PrismFloor selves={selves} activeSelfId={activeSelfId} artifactCount={artifactCount} />;
+  if (presentsFloor({ activeSelfId, artifactCount })) {
+    return <PrismFloor selves={selves} activeSelfId={activeSelfId!} artifactCount={artifactCount!} />;
   }
 
   return <main />;
