@@ -11,9 +11,18 @@
 // nothing more: no router, URL, history, persistence, fetch, selection, or
 // active-Self change. A subsequent Continue re-attempts the read — one attempt
 // per deliberate human act.
+//
+// P10-S14 — the union gains a Composer member, reached by an explicit Compose
+// act from the top-level Correspondences surface. It carries the Correspondences
+// state it departed from, and that is not bookkeeping: leaving the Composer must
+// reach top-level Correspondences AND must not refresh it. Returning to a
+// `pending` state would fire the read effect, which is a refresh; returning to a
+// synthesised `projection` would invent data. Carrying the departed state is the
+// only mechanism that satisfies both, and it stays entirely in memory.
 
 import { deriveCorrespondences, type CorrespondenceGroup } from './derive.ts';
 import type { ReadOutcome } from './read.ts';
+import type { ComposerState } from '../composer/state.ts';
 import type { SelfSummary } from '../self/selves.ts';
 
 export const CORRESPONDENCES_STATES = ['pending', 'projection', 'unavailable'] as const;
@@ -26,7 +35,10 @@ export type CorrespondencesState =
 
 export type Surface =
   | { readonly kind: 'prism' }
-  | { readonly kind: 'correspondences'; readonly state: CorrespondencesState };
+  | { readonly kind: 'correspondences'; readonly state: CorrespondencesState }
+  | { readonly kind: 'composer'; readonly from: CorrespondencesState };
+
+export type ComposerSurface = Extract<Surface, { readonly kind: 'composer' }>;
 
 export const prismSurface: Surface = { kind: 'prism' };
 
@@ -40,6 +52,26 @@ export function onContinue(): Surface {
 /** Return: the exact inverse of Continue. It fetches nothing. */
 export function onReturn(): Surface {
   return prismSurface;
+}
+
+/** Compose: the explicit act that opens the Composer from top-level
+ *  Correspondences. It selects no counterpart, pre-fills no recipient, and
+ *  issues nothing — the Composer opens empty and asks the server for nothing. */
+export function onCompose(from: CorrespondencesState): Surface {
+  return { kind: 'composer', from };
+}
+
+/** Leaving the Composer. The guard lives HERE rather than in the absence of a
+ *  rendered control, so an unsettled two-stage creation attempt cannot be
+ *  abandoned even by a caller that invokes the transition directly.
+ *
+ *  While `creating`, the SAME surface object is returned — not an equal one.
+ *  A reconstruction would be indistinguishable by `kind` while silently losing
+ *  or altering the carried `from`, which is the whole reason return can restore
+ *  Correspondences without re-reading it. */
+export function onLeaveComposer(surface: ComposerSurface, composerState: ComposerState): Surface {
+  if (composerState.kind === 'creating') return surface;
+  return { kind: 'correspondences', state: surface.from };
 }
 
 /** All-or-none: only an `ok` outcome yields a projection. 401 and 403 are

@@ -31,7 +31,18 @@ import AuthGate from './auth/AuthGate.tsx';
 import { outcomeOf, presentsGate, type Outcome } from './auth/session.ts';
 import Correspondences from './correspondences/Correspondences.tsx';
 import { readCorrespondences } from './correspondences/read.ts';
-import { onContinue, onReadResolved, onReturn, prismSurface, type Surface } from './correspondences/surface.ts';
+import {
+  onCompose,
+  onContinue,
+  onLeaveComposer,
+  onReadResolved,
+  onReturn,
+  prismSurface,
+  type Surface,
+} from './correspondences/surface.ts';
+import { performSend } from './composer/act.ts';
+import Composer from './composer/Composer.tsx';
+import { initialComposer, withText, type ComposerState } from './composer/state.ts';
 import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
 import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
@@ -55,6 +66,11 @@ export default function App() {
   const [activeSelfId, setActiveSelfId] = useState<string | null>(null);
   const [artifactCount, setArtifactCount] = useState<number | null>(null);
   const [surface, setSurface] = useState<Surface>(prismSurface);
+  // P10-S14 — ONE authoritative Composer state. The composed text lives inside
+  // it, never beside it: the text rendered, the text submitted, the text
+  // preserved after a failure, and the text a retry would reuse are the same
+  // field, so they cannot drift apart on an irreversible write path.
+  const [composerState, setComposerState] = useState<ComposerState>(initialComposer);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,7 +217,45 @@ export default function App() {
   }
 
   if (surface.kind === 'correspondences') {
-    return <Correspondences state={surface.state} onReturn={() => setSurface(onReturn())} />;
+    // Compose sits beside the projection, not inside it: it annotates,
+    // selects, and enters no counterpart group, and Correspondences itself is
+    // untouched by it.
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setComposerState(initialComposer); // the Composer opens empty
+            setSurface(onCompose(surface.state));
+          }}
+        >
+          Compose
+        </button>
+        <Correspondences state={surface.state} onReturn={() => setSurface(onReturn())} />
+      </>
+    );
+  }
+
+  if (surface.kind === 'composer' && activeSelfId !== null) {
+    return (
+      <Composer
+        state={composerState}
+        onTextChange={(text) => setComposerState(withText(composerState, text))}
+        onSend={() =>
+          performSend(
+            {
+              transport: browserTransport,
+              actingSelfId: activeSelfId,
+              apply: setComposerState,
+              // The concrete authoritative transitions, not approximations.
+              dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+            },
+            composerState,
+          )
+        }
+        onReturn={() => setSurface(onLeaveComposer(surface, composerState))}
+      />
+    );
   }
 
   if (presentsFloor({ activeSelfId, artifactCount })) {
