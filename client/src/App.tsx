@@ -43,6 +43,7 @@ import {
   sessionStorageOrNull,
 } from './self/active.ts';
 import { settleForbidden } from './self/forbidden.ts';
+import { loadSelves } from './self/load.ts';
 import SelfSwitcher from './self/SelfSwitcher.tsx';
 import { parseSelves, type SelfSummary } from './self/selves.ts';
 
@@ -59,27 +60,40 @@ export default function App() {
     let cancelled = false;
     void (async () => {
       const store = sessionStorageOrNull();
-      try {
-        const res = await sendAccount(browserTransport, { method: 'GET', path: '/auth/selves' });
-        if (cancelled) return;
-        const next = outcomeOf(res.status);
-        setOutcome(next);
-        if (next.kind === 'unauthenticated') {
-          onSessionExpired(store); // no active-Self assertion survives an invalid session
-          return;
-        }
-        if (next.kind !== 'ok') return;
-        const listed = parseSelves(await res.json());
-        if (cancelled) return;
-        setSelves(listed);
-        setActiveSelfId(restore(store, listed));
-      } catch {
-        if (!cancelled) setOutcome({ kind: 'transport-failure' });
+      const loaded = await loadSelves(browserTransport);
+      if (cancelled) return;
+      if (loaded.kind === 'unauthenticated') {
+        setOutcome({ kind: 'unauthenticated' });
+        onSessionExpired(store); // no active-Self assertion survives an invalid session
+        return;
       }
+      if (loaded.kind !== 'listed') {
+        setOutcome({ kind: 'transport-failure' });
+        return;
+      }
+      setOutcome({ kind: 'ok' });
+      setSelves(loaded.selves);
+      // The ONLY call site of restore, and it is inside this one-time effect.
+      setActiveSelfId(restore(store, loaded.selves));
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // P10-S12.3 — successful authentication establishes authoritative Self state.
+  // Setting the outcome to `ok` is not enough: the mount effect above is keyed
+  // on [] and cannot re-run within a page load, so without this the Self list
+  // stays empty and the human lands on the empty shell after authenticating.
+  // The load runs once per authentication act — an explicit human act under
+  // R12 — and never calls restore: the gate is reached only on 401 (R2/P10-M5),
+  // both 401 paths discard the persisted id first, and keeping restore at one
+  // call site is what leaves the P10-S11 loop proof untouched.
+  const authenticated = useCallback(async () => {
+    const loaded = await loadSelves(browserTransport);
+    if (loaded.kind === 'unauthenticated') return; // the gate stays; no loop is started
+    setOutcome({ kind: 'ok' });
+    if (loaded.kind === 'listed') setSelves(loaded.selves);
   }, []);
 
   // 401 — the session is no longer valid. One disposition, whichever read
@@ -171,7 +185,7 @@ export default function App() {
   }, [surface, activeSelfId, selves, sessionExpired, forbidden]);
 
   if (outcome !== null && presentsGate(outcome)) {
-    return <AuthGate transport={browserTransport} onAuthenticated={() => setOutcome({ kind: 'ok' })} />;
+    return <AuthGate transport={browserTransport} onAuthenticated={() => void authenticated()} />;
   }
 
   if (outcome?.kind === 'ok' && selves.length > 0 && presentsSelection(activeSelfId)) {
