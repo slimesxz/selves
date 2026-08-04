@@ -90,7 +90,11 @@ describe('P10-S14 Composer surface', () => {
     const r = recording([{ status: 201, body: { id: 'x' } }]);
     const opened = onCompose(DEPARTED);
 
-    expect(opened).toEqual({ kind: 'composer', from: DEPARTED });
+    // P10-Q4 compatibility edit K1 (P10-S16), cause: the retained-draft surface
+    // shape. P10-S16 widens the Composer surface to carry the exact retained
+    // draft-management value a guarded reopen restores. Compose opens fresh, so
+    // that value is null here; the assertion stays exact rather than kind-only.
+    expect(opened).toEqual({ kind: 'composer', from: DEPARTED, draft: null });
     expect((opened as ComposerSurface).from).toBe(DEPARTED); // the exact departed state
     // Opening is a surface transition and nothing else: it takes no transport
     // and can therefore issue nothing.
@@ -105,13 +109,17 @@ describe('P10-S14 Composer surface', () => {
 
   it('onLeaveComposer returns the departed Correspondences state from composing, failed, and created, and the exact same surface while creating', () => {
     const composerSurface = onCompose(DEPARTED) as ComposerSurface;
+    const settledRecipients = { kind: 'idle', recipients: [] } as const;
 
     for (const [label, state] of [
       ['composing', composing('a letter')],
       ['failed', failed('a letter', 'artifact-1')],
       ['created', done],
     ] as const) {
-      const returned = onLeaveComposer(composerSurface, state);
+      // P10-Q4 compatibility edit K2 (P10-S16), cause: the leave-while-pending
+      // ruling widened this transition to receive the authoritative recipient
+      // state. Settled recipient state leaves exactly as before.
+      const returned = onLeaveComposer(composerSurface, state, settledRecipients);
       expect(returned.kind, label).toBe('correspondences');
       expect((returned as { state: CorrespondencesState }).state, label).toBe(DEPARTED); // exact, not rebuilt
       expect(JSON.stringify(returned), label).not.toContain('pending'); // no refresh is provoked
@@ -119,8 +127,17 @@ describe('P10-S14 Composer surface', () => {
 
     // Creating cannot leave — and the guard returns the SAME object, so a
     // reconstruction that silently altered `from` would fail here.
-    const held = onLeaveComposer(composerSurface, creating('a letter'));
+    const held = onLeaveComposer(composerSurface, creating('a letter'), settledRecipients);
     expect(held).toBe(composerSurface);
+
+    // K2 extension: an unsettled recipient mutation refuses departure too, by
+    // the same identity guarantee.
+    for (const [label, recipients] of [
+      ['adding', { kind: 'adding', recipients: [], candidateId: 'r1' } as const],
+      ['removing', { kind: 'removing', recipients: ['r1'], targetId: 'r1' } as const],
+    ] as const) {
+      expect(onLeaveComposer(composerSurface, done, recipients), label).toBe(composerSurface);
+    }
 
     // The transition takes no transport and names no navigation machinery.
     const forbidden = ['history', 'pushState', 'location', 'URL(', 'sessionStorage', 'localStorage', 'fetch('];

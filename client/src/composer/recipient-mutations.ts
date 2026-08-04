@@ -45,3 +45,29 @@ export async function addRecipient(
     return 'failed';
   }
 }
+
+/** P10-S16 — removal shares the contract exactly: a DELETE carrying NO request
+ *  body, whose only success is a bodyless 204. The committed route answers
+ *  through the same runVoid, and the domain function only DELETEs a recipient
+ *  row — it contains no placement UPDATE and no state assignment, so a removal
+ *  can never move a draft out of `draft`. */
+export async function removeRecipient(
+  transport: Transport,
+  actingSelfId: string,
+  placementId: string,
+  recipientSelfId: string,
+): Promise<AddOutcome> {
+  try {
+    const res = await sendSelf(transport, {
+      method: 'DELETE',
+      path: `${RECIPIENTS_PATH(placementId)}/${recipientSelfId}`,
+      actingSelf: actingSelfId,
+    });
+    const outcome = outcomeOf(res.status);
+    if (outcome.kind === 'unauthenticated') return 'session-expired';
+    if (outcome.kind === 'forbidden') return 'forbidden';
+    return res.status === ADDED_STATUS ? 'added' : 'failed';
+  } catch {
+    return 'failed';
+  }
+}

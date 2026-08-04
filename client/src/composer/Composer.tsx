@@ -31,6 +31,13 @@ export interface RecipientBundle {
   readonly state: RecipientState;
   readonly candidates: readonly RecipientCandidate[];
   readonly onAdd: (candidateId: string) => void;
+  /** P10-S16 — Rule B: removal is offered only for recipients the client
+   *  already holds. There is no list of recipients it does not hold, so an
+   *  unknown-recipient removal has no control and no request path. */
+  readonly onRemove?: (targetId: string) => void;
+  /** Labels for known recipients, so removal controls can name whom they drop
+   *  rather than showing an internal id. */
+  readonly known?: readonly RecipientCandidate[];
 }
 
 export default function Composer({
@@ -62,10 +69,28 @@ export default function Composer({
               </button>
             ))
           : null}
+        {recipients?.known?.map((known) => (
+          <button
+            key={`remove-${known.id}`}
+            type="button"
+            aria-label={`Remove recipient ${known.label}`}
+            onClick={() => recipients.onRemove?.(known.id)}
+          >
+            {`Remove ${known.label}`}
+          </button>
+        ))}
         {recipients?.state.kind === 'failed' ? <p role="status">Not added.</p> : null}
-        <button type="button" onClick={onReturn}>
-          Back
-        </button>
+        {recipients?.state.kind === 'remove-failed' ? <p role="status">Not removed.</p> : null}
+        {recipients?.state.kind === 'removing' ? <p role="status">Removing.</p> : null}
+        {recipients?.state.kind === 'adding' ? <p role="status">Adding.</p> : null}
+        {/* Return is withheld while any recipient mutation is unsettled. The
+            surface transition refuses to leave regardless; omitting the control
+            keeps the presentation honest about that. */}
+        {recipients && (recipients.state.kind === 'adding' || recipients.state.kind === 'removing') ? null : (
+          <button type="button" onClick={onReturn}>
+            Back
+          </button>
+        )}
       </main>
     );
   }

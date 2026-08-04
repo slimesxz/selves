@@ -23,6 +23,8 @@
 import { deriveCorrespondences, type CorrespondenceGroup } from './derive.ts';
 import type { ReadOutcome } from './read.ts';
 import type { ComposerState } from '../composer/state.ts';
+import type { RecipientState } from '../composer/recipient-state.ts';
+import type { RetainedDraft } from '../composer/retained-draft.ts';
 import type { SelfSummary } from '../self/selves.ts';
 
 export const CORRESPONDENCES_STATES = ['pending', 'projection', 'unavailable'] as const;
@@ -36,7 +38,13 @@ export type CorrespondencesState =
 export type Surface =
   | { readonly kind: 'prism' }
   | { readonly kind: 'correspondences'; readonly state: CorrespondencesState }
-  | { readonly kind: 'composer'; readonly from: CorrespondencesState };
+  | {
+      readonly kind: 'composer';
+      readonly from: CorrespondencesState;
+      /** P10-S16 — the exact retained draft-management value a guarded reopen
+       *  restores, or null for a Composer opened fresh by Compose. */
+      readonly draft: RetainedDraft | null;
+    };
 
 export type ComposerSurface = Extract<Surface, { readonly kind: 'composer' }>;
 
@@ -58,7 +66,7 @@ export function onReturn(): Surface {
  *  Correspondences. It selects no counterpart, pre-fills no recipient, and
  *  issues nothing — the Composer opens empty and asks the server for nothing. */
 export function onCompose(from: CorrespondencesState): Surface {
-  return { kind: 'composer', from };
+  return { kind: 'composer', from, draft: null };
 }
 
 /** Leaving the Composer. The guard lives HERE rather than in the absence of a
@@ -69,8 +77,18 @@ export function onCompose(from: CorrespondencesState): Surface {
  *  A reconstruction would be indistinguishable by `kind` while silently losing
  *  or altering the carried `from`, which is the whole reason return can restore
  *  Correspondences without re-reading it. */
-export function onLeaveComposer(surface: ComposerSurface, composerState: ComposerState): Surface {
+export function onLeaveComposer(
+  surface: ComposerSurface,
+  composerState: ComposerState,
+  recipientState: RecipientState,
+): Surface {
   if (composerState.kind === 'creating') return surface;
+  // P10-S16 — an unsettled recipient mutation may not be walked away from. Its
+  // server outcome is unknown at the instant of leaving, and the surface whose
+  // content that outcome determines is the one being left. A later settlement
+  // writing into retained state does not make the departure safe; it only makes
+  // the result observable to someone who happens to come back.
+  if (recipientState.kind === 'adding' || recipientState.kind === 'removing') return surface;
   return { kind: 'correspondences', state: surface.from };
 }
 

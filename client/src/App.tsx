@@ -43,7 +43,9 @@ import {
 import { performSend } from './composer/act.ts';
 import Composer from './composer/Composer.tsx';
 import { performAdd } from './composer/recipient-add.ts';
+import { performRemove } from './composer/recipient-remove.ts';
 import { deriveCandidates, noRecipients, type RecipientState } from './composer/recipient-state.ts';
+import { onReopenDraft, retain, type RetainedDraft } from './composer/retained-draft.ts';
 import { initialComposer, withText, type ComposerState } from './composer/state.ts';
 import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
@@ -78,6 +80,11 @@ export default function App() {
   // carry recipients. Candidates, the add request, the successful update, and
   // retry all read from this one value, so no second or optimistic list exists.
   const [recipientState, setRecipientState] = useState<RecipientState>(noRecipients);
+  // P10-S16 — the retained draft. Leaving the Composer used to discard the only
+  // client reference to a durable Placement row; this is the mechanism that
+  // keeps it reachable for the rest of the page session. One value, written on
+  // a permitted leave and restored on a guarded reopen.
+  const [retainedDraft, setRetainedDraft] = useState<RetainedDraft | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,16 +246,28 @@ export default function App() {
         >
           Compose
         </button>
+        {retainedDraft === null ? null : (
+          <button type="button" onClick={() => setSurface(onReopenDraft(surface, retainedDraft))}>
+            Resume draft
+          </button>
+        )}
         <Correspondences state={surface.state} onReturn={() => setSurface(onReturn())} />
       </>
     );
   }
 
   if (surface.kind === 'composer' && activeSelfId !== null) {
+    // A reopened surface carries the exact retained value; restore it into the
+    // live state rather than rebuilding anything from it.
+    const live: ComposerState =
+      surface.draft === null
+        ? composerState
+        : { kind: 'created', artifactId: surface.draft.artifactId, placementId: surface.draft.placementId };
+    const liveRecipients = surface.draft === null ? recipientState : surface.draft.recipients;
     return (
       <Composer
-        state={composerState}
-        onTextChange={(text) => setComposerState(withText(composerState, text))}
+        state={live}
+        onTextChange={(text) => setComposerState(withText(live, text))}
         onSend={() =>
           performSend(
             {
@@ -258,27 +277,51 @@ export default function App() {
               // The concrete authoritative transitions, not approximations.
               dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
             },
-            composerState,
+            live,
           )
         }
-        onReturn={() => setSurface(onLeaveComposer(surface, composerState))}
+        onReturn={() => {
+          const left = onLeaveComposer(surface, live, liveRecipients);
+          if (left === surface) return; // a pending mutation refuses departure
+          if (live.kind === 'created') {
+            setRetainedDraft(retain(live.artifactId, live.placementId, liveRecipients, surface.from));
+          }
+          setComposerState(live);
+          setRecipientState(liveRecipients);
+          setSurface(left);
+        }}
         recipients={
-          composerState.kind === 'created'
+          live.kind === 'created'
             ? {
-                state: recipientState,
+                state: liveRecipients,
                 candidates: deriveCandidates(selves, activeSelfId),
+                known: deriveCandidates(selves, activeSelfId).filter((c) =>
+                  liveRecipients.recipients.includes(c.id),
+                ),
                 onAdd: (candidateId) =>
                   void performAdd(
                     {
                       transport: browserTransport,
                       actingSelfId: activeSelfId,
-                      placementId: composerState.placementId,
+                      placementId: live.placementId,
                       apply: setRecipientState,
                       // The concrete authoritative transitions, not approximations.
                       dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
                     },
-                    recipientState,
+                    liveRecipients,
                     candidateId,
+                  ),
+                onRemove: (targetId) =>
+                  void performRemove(
+                    {
+                      transport: browserTransport,
+                      actingSelfId: activeSelfId,
+                      placementId: live.placementId,
+                      apply: setRecipientState,
+                      dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+                    },
+                    liveRecipients,
+                    targetId,
                   ),
               }
             : undefined
