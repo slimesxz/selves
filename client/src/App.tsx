@@ -44,6 +44,8 @@ import { performSend } from './composer/act.ts';
 import Composer from './composer/Composer.tsx';
 import { performAdd } from './composer/recipient-add.ts';
 import { performRemove } from './composer/recipient-remove.ts';
+import { performDeparture } from './composer/departure.ts';
+import { noDeparture, permitsDeparture, type DepartureState } from './composer/departure-state.ts';
 import { deriveCandidates, noRecipients, type RecipientState } from './composer/recipient-state.ts';
 import { onReopenDraft, retain, type RetainedDraft } from './composer/retained-draft.ts';
 import { initialComposer, withText, type ComposerState } from './composer/state.ts';
@@ -85,6 +87,11 @@ export default function App() {
   // keeps it reachable for the rest of the page session. One value, written on
   // a permitted leave and restored on a guarded reopen.
   const [retainedDraft, setRetainedDraft] = useState<RetainedDraft | null>(null);
+  // P10-S17 — departure lifecycle state, separate from the draft's own. A
+  // Placement that has departed is no longer correctable, and the joint
+  // settlement below is what makes the client stop describing it as such at the
+  // same instant it stops being true.
+  const [departureState, setDepartureState] = useState<DepartureState>(noDeparture);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,6 +248,7 @@ export default function App() {
           onClick={() => {
             setComposerState(initialComposer); // the Composer opens empty
             setRecipientState(noRecipients); // and with no recipients carried in
+            setDepartureState(noDeparture); // and with no lifecycle state carried in
             setSurface(onCompose(surface.state));
           }}
         >
@@ -322,6 +330,35 @@ export default function App() {
                     },
                     liveRecipients,
                     targetId,
+                  ),
+              }
+            : undefined
+        }
+        departure={
+          live.kind === 'created'
+            ? {
+                state: departureState,
+                // The SAME authoritative predicate the boundary uses; the
+                // control never offers what startDeparture would refuse.
+                eligible: permitsDeparture(live, liveRecipients, departureState),
+                onDepart: () =>
+                  void performDeparture(
+                    {
+                      transport: browserTransport,
+                      actingSelfId: activeSelfId,
+                      // One joint result: departed state and the extinguished
+                      // retained draft arrive together, never as two setters
+                      // that could disagree.
+                      apply: (settlement) => {
+                        setDepartureState(settlement.departure);
+                        setRetainedDraft(settlement.retainedDraft);
+                      },
+                      dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+                    },
+                    live,
+                    liveRecipients,
+                    departureState,
+                    retainedDraft,
                   ),
               }
             : undefined

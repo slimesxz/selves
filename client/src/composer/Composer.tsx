@@ -21,6 +21,7 @@
 
 import { nextRequest, type ComposerState } from './state.ts';
 import type { RecipientCandidate, RecipientState } from './recipient-state.ts';
+import type { DepartureState } from './departure-state.ts';
 
 /** P10-S15 — the recipient bundle is OPTIONAL by ruling, not by preference.
  *  Required props would break three prior cases outside the single authorized
@@ -40,19 +41,46 @@ export interface RecipientBundle {
   readonly known?: readonly RecipientCandidate[];
 }
 
+/** P10-S17 — the departure bundle is OPTIONAL by ruling. Required props would
+ *  conflict with prior valid invocations and force unassigned compatibility
+ *  edits. With it, an eligible completed draft exposes Depart and the departing
+ *  presentation is available; without it the P10-S16 presentation is preserved
+ *  exactly. Both are public forms and both are exercised. */
+export interface DepartureBundle {
+  readonly state: DepartureState;
+  /** Derived from the SAME authoritative predicate the boundary uses. */
+  readonly eligible: boolean;
+  readonly onDepart: () => void;
+}
+
 export default function Composer({
   state,
   onTextChange,
   onSend,
   onReturn,
   recipients,
+  departure,
 }: {
   state: ComposerState;
   onTextChange: (text: string) => void;
   onSend: () => void;
   onReturn: () => void;
   recipients?: RecipientBundle;
+  departure?: DepartureBundle;
 }) {
+  // Departed is a lifecycle state, not a draft: it presents what happened and
+  // offers no correction, no reopen, no cancellation, and no settlement.
+  if (departure?.state.kind === 'departed') {
+    return (
+      <main>
+        <p role="status">Departing</p>
+        <button type="button" onClick={onReturn}>
+          Back
+        </button>
+      </main>
+    );
+  }
+
   if (state.kind === 'created') {
     return (
       <main>
@@ -83,6 +111,13 @@ export default function Composer({
         {recipients?.state.kind === 'remove-failed' ? <p role="status">Not removed.</p> : null}
         {recipients?.state.kind === 'removing' ? <p role="status">Removing.</p> : null}
         {recipients?.state.kind === 'adding' ? <p role="status">Adding.</p> : null}
+        {departure?.state.kind === 'departing-pending' ? <p role="status">Departing.</p> : null}
+        {departure?.state.kind === 'departure-failed' ? <p role="status">Not departed.</p> : null}
+        {departure && departure.eligible && departure.state.kind !== 'departing-pending' ? (
+          <button type="button" onClick={departure.onDepart}>
+            Depart
+          </button>
+        ) : null}
         {/* Return is withheld while any recipient mutation is unsettled. The
             surface transition refuses to leave regardless; omitting the control
             keeps the presentation honest about that. */}
