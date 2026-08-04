@@ -42,6 +42,8 @@ import {
 } from './correspondences/surface.ts';
 import { performSend } from './composer/act.ts';
 import Composer from './composer/Composer.tsx';
+import { performAdd } from './composer/recipient-add.ts';
+import { deriveCandidates, noRecipients, type RecipientState } from './composer/recipient-state.ts';
 import { initialComposer, withText, type ComposerState } from './composer/state.ts';
 import { fetchArtifactCount } from './prism/count.ts';
 import PrismFloor from './prism/PrismFloor.tsx';
@@ -71,6 +73,11 @@ export default function App() {
   // preserved after a failure, and the text a retry would reuse are the same
   // field, so they cannot drift apart on an irreversible write path.
   const [composerState, setComposerState] = useState<ComposerState>(initialComposer);
+  // P10-S15 — recipient state has ONE authoritative home, and it is here rather
+  // than inside ComposerState: the committed `created` shape is not widened to
+  // carry recipients. Candidates, the add request, the successful update, and
+  // retry all read from this one value, so no second or optimistic list exists.
+  const [recipientState, setRecipientState] = useState<RecipientState>(noRecipients);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,6 +233,7 @@ export default function App() {
           type="button"
           onClick={() => {
             setComposerState(initialComposer); // the Composer opens empty
+            setRecipientState(noRecipients); // and with no recipients carried in
             setSurface(onCompose(surface.state));
           }}
         >
@@ -254,6 +262,27 @@ export default function App() {
           )
         }
         onReturn={() => setSurface(onLeaveComposer(surface, composerState))}
+        recipients={
+          composerState.kind === 'created'
+            ? {
+                state: recipientState,
+                candidates: deriveCandidates(selves, activeSelfId),
+                onAdd: (candidateId) =>
+                  void performAdd(
+                    {
+                      transport: browserTransport,
+                      actingSelfId: activeSelfId,
+                      placementId: composerState.placementId,
+                      apply: setRecipientState,
+                      // The concrete authoritative transitions, not approximations.
+                      dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+                    },
+                    recipientState,
+                    candidateId,
+                  ),
+              }
+            : undefined
+        }
       />
     );
   }

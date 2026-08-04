@@ -234,10 +234,29 @@ describe('P10-S14 Composer surface', () => {
     for (const action of ['Recipient', 'recipient', 'Depart', 'Settle', 'Cancel', 'Vault', 'Key']) {
       expect(out.includes(action), action).toBe(false);
     }
-    // Only one control exists in that state, and it is the return.
-    const buttons = descendants(invoke({ state: done, ...noop })).filter((e) => e.type === 'button');
-    expect(buttons).toHaveLength(1);
-    expect(JSON.stringify(buttons[0]!.props.children)).toBe(JSON.stringify('Back'));
+    // P10-Q4 compatibility edit (P10-S15): the exact button count is replaced by
+    // assertions over control identity, because P10-S15 expands this same state
+    // to expose recipient add. The behavioral purpose is unchanged — the state
+    // exposes return and no unauthorized lifecycle action — and a count would
+    // only become brittle again.
+    let added = '';
+    const tree = invoke({
+      state: done,
+      ...noop,
+      recipients: {
+        state: { kind: 'idle', recipients: [] } as const,
+        candidates: [{ id: 'r1', label: 'Ora' }],
+        onAdd: (id) => void (added = id),
+      },
+    });
+    expect(buttonLabelled(tree, 'Back')).toBeDefined(); // return remains
+    const add = buttonLabelled(tree, 'Ora'); // the lawful recipient-add control
+    expect(add).toBeDefined();
+    add!.props.onClick!(); // and it adds that candidate, not something else
+    expect(added).toBe('r1');
+    for (const action of ['Remove', 'Depart', 'Settle', 'Cancel', 'Vault', 'Key']) {
+      expect(buttonLabelled(tree, action), action).toBeUndefined(); // no unauthorized lifecycle action
+    }
   });
 
   it('the surface, act, and component introduce no router, URL, history, persistence, or automatic read', () => {

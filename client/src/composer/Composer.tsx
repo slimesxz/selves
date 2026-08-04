@@ -20,22 +20,49 @@
 // what is rendered here.
 
 import { nextRequest, type ComposerState } from './state.ts';
+import type { RecipientCandidate, RecipientState } from './recipient-state.ts';
+
+/** P10-S15 — the recipient bundle is OPTIONAL by ruling, not by preference.
+ *  Required props would break three prior cases outside the single authorized
+ *  compatibility edit, so the component has two lawful public shapes: with the
+ *  bundle the completed draft exposes recipient add; without it the completed
+ *  draft keeps its P10-S14 return-only form. Both are exercised. */
+export interface RecipientBundle {
+  readonly state: RecipientState;
+  readonly candidates: readonly RecipientCandidate[];
+  readonly onAdd: (candidateId: string) => void;
+}
 
 export default function Composer({
   state,
   onTextChange,
   onSend,
   onReturn,
+  recipients,
 }: {
   state: ComposerState;
   onTextChange: (text: string) => void;
   onSend: () => void;
   onReturn: () => void;
+  recipients?: RecipientBundle;
 }) {
   if (state.kind === 'created') {
     return (
       <main>
         <p role="status">Draft created</p>
+        {recipients
+          ? recipients.candidates.map((candidate) => (
+              <button
+                key={candidate.id}
+                type="button"
+                aria-label={`Add recipient ${candidate.label}`}
+                onClick={() => recipients.onAdd(candidate.id)}
+              >
+                {candidate.label}
+              </button>
+            ))
+          : null}
+        {recipients?.state.kind === 'failed' ? <p role="status">Not added.</p> : null}
         <button type="button" onClick={onReturn}>
           Back
         </button>
