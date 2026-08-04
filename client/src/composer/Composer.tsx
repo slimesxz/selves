@@ -64,6 +64,21 @@ export interface CancellationBundle {
   readonly onCancel: () => void;
 }
 
+/** P10-S19 — the settlement bundle is OPTIONAL by ruling, for the same reason
+ *  the three before it were. It carries no lifecycle value: the lifecycle is
+ *  read from the departure bundle, because there is one authority.
+ *
+ *  `eligible` reflects what the CLIENT can observe, not authoritative
+ *  eligibility. The server enforces the snapshotted interval and rejects until
+ *  it has elapsed, so Settle may be pressable while the Placement is not yet
+ *  authoritatively eligible. That is the blind-settlement condition; it is
+ *  recorded, not designed away, and the alternatives all invent something the
+ *  client may not know. */
+export interface SettlementBundle {
+  readonly eligible: boolean;
+  readonly onSettle: () => void;
+}
+
 export default function Composer({
   state,
   onTextChange,
@@ -72,6 +87,7 @@ export default function Composer({
   recipients,
   departure,
   cancellation,
+  settlement,
 }: {
   state: ComposerState;
   onTextChange: (text: string) => void;
@@ -80,7 +96,22 @@ export default function Composer({
   recipients?: RecipientBundle;
   departure?: DepartureBundle;
   cancellation?: CancellationBundle;
+  settlement?: SettlementBundle;
 }) {
+  // Settled is the end of the lifecycle: the recipient boundary has been
+  // crossed and nothing can be recalled, corrected, departed, cancelled, or
+  // settled again.
+  if (departure?.state.kind === 'settled') {
+    return (
+      <main>
+        <p role="status">Settled</p>
+        <button type="button" onClick={onReturn}>
+          Back
+        </button>
+      </main>
+    );
+  }
+
   // Cancelled is terminal: it presents what happened and offers no correction,
   // no reopen, no departure, no cancellation, and no settlement.
   if (departure?.state.kind === 'cancelled') {
@@ -99,15 +130,25 @@ export default function Composer({
   // when the authoritative predicate permits it and a caller supplied the
   // bundle; its absence leaves the P10-S17 presentation exactly as it was.
   if (departure?.state.kind === 'departed' || departure?.state.kind === 'cancelling-pending' ||
-      departure?.state.kind === 'cancellation-failed') {
+      departure?.state.kind === 'cancellation-failed' || departure?.state.kind === 'settling-pending' ||
+      departure?.state.kind === 'settlement-failed') {
     return (
       <main>
         <p role="status">Departing</p>
         {departure.state.kind === 'cancelling-pending' ? <p role="status">Cancelling.</p> : null}
         {departure.state.kind === 'cancellation-failed' ? <p role="status">Not cancelled.</p> : null}
+        {departure.state.kind === 'settling-pending' ? <p role="status">Settling.</p> : null}
+        {/* Only that it did not complete. The client cannot lawfully say why:
+            not the interval, not the race, not a prior settlement. */}
+        {departure.state.kind === 'settlement-failed' ? <p role="status">Not settled.</p> : null}
         {cancellation && cancellation.eligible ? (
           <button type="button" onClick={cancellation.onCancel}>
             Cancel
+          </button>
+        ) : null}
+        {settlement && settlement.eligible ? (
+          <button type="button" onClick={settlement.onSettle}>
+            Settle
           </button>
         ) : null}
         <button type="button" onClick={onReturn}>

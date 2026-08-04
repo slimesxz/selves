@@ -42,6 +42,13 @@ export interface CancellingPendingState {
   readonly recipients: readonly string[];
 }
 
+export interface SettlingPendingState {
+  readonly kind: 'settling-pending';
+  readonly placementId: string;
+  readonly artifactId: string;
+  readonly recipients: readonly string[];
+}
+
 /** P10-S18 — this union is the Placement lifecycle as the client holds it, and
  *  it is the ONE authority for both departure and cancellation eligibility.
  *
@@ -83,6 +90,26 @@ export type DepartureState =
    *  depart again nor have its recipients corrected. */
   | {
       readonly kind: 'cancelled';
+      readonly placementId: string;
+      readonly artifactId: string;
+      readonly recipients: readonly string[];
+    }
+  | SettlingPendingState
+  | {
+      readonly kind: 'settlement-failed';
+      readonly placementId: string;
+      readonly artifactId: string;
+      readonly recipients: readonly string[];
+    }
+  /** Terminal, and the end of the lifecycle. The recipient boundary has been
+   *  crossed and the Placement cannot be recalled. Nothing leaves this kind:
+   *  it can neither depart, nor cancel, nor settle again. The server would in
+   *  fact answer 204 to a repeated settlement — its function returns early on
+   *  an already-settled row — so terminality here is the client's own rule
+   *  rather than a server rejection, and that asymmetry is recorded rather
+   *  than smoothed over. */
+  | {
+      readonly kind: 'settled';
       readonly placementId: string;
       readonly artifactId: string;
       readonly recipients: readonly string[];

@@ -48,6 +48,8 @@ import { performDeparture } from './composer/departure.ts';
 import { noDeparture, permitsDeparture, type DepartureState } from './composer/departure-state.ts';
 import { performCancellation } from './composer/cancellation.ts';
 import { permitsCancellation } from './composer/cancellation-state.ts';
+import { performSettlement } from './composer/settlement.ts';
+import { permitsSettlement } from './composer/settlement-state.ts';
 import { deriveCandidates, noRecipients, type RecipientState } from './composer/recipient-state.ts';
 import { onReopenDraft, retain, type RetainedDraft } from './composer/retained-draft.ts';
 import { initialComposer, withText, type ComposerState } from './composer/state.ts';
@@ -379,6 +381,33 @@ export default function App() {
                       // One joint result: the cancelled lifecycle and the null
                       // retained draft arrive together, never as two setters
                       // that could disagree.
+                      apply: (settlement) => {
+                        setDepartureState(settlement.lifecycle);
+                        setRetainedDraft(settlement.retainedDraft);
+                      },
+                      dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+                    },
+                    departureState,
+                    retainedDraft,
+                  ),
+              }
+            : undefined
+        }
+        settlement={
+          live.kind === 'created'
+            ? {
+                // What the CLIENT can observe. Authoritative eligibility is the
+                // server's: it enforces the snapshotted interval and rejects
+                // until it elapses. The blind-settlement condition follows, and
+                // nothing here fabricates timing to soften it.
+                eligible: permitsSettlement(departureState),
+                onSettle: () =>
+                  void performSettlement(
+                    {
+                      transport: browserTransport,
+                      actingSelfId: activeSelfId,
+                      // One terminal result: the settled lifecycle and the null
+                      // retained draft arrive together.
                       apply: (settlement) => {
                         setDepartureState(settlement.lifecycle);
                         setRetainedDraft(settlement.retainedDraft);
