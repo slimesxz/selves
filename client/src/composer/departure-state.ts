@@ -35,6 +35,27 @@ export interface DepartingPendingState {
   readonly recipients: readonly string[];
 }
 
+export interface CancellingPendingState {
+  readonly kind: 'cancelling-pending';
+  readonly placementId: string;
+  readonly artifactId: string;
+  readonly recipients: readonly string[];
+}
+
+/** P10-S18 — this union is the Placement lifecycle as the client holds it, and
+ *  it is the ONE authority for both departure and cancellation eligibility.
+ *
+ *  It carries the cancellation kinds rather than a second parallel value, and
+ *  that is not tidiness. Two values describing one lifecycle can disagree: a
+ *  cancellation value reading `cancelled` beside a departure value reset to
+ *  `idle` would let `permitsDeparture` below answer true, and the client would
+ *  issue a departure request for a Placement its own terminal law says can never
+ *  depart again. The server would refuse it — the row is no longer `draft` — but
+ *  a client that asks is already wrong.
+ *
+ *  Because `permitsDeparture` is written as a positive whitelist, every kind
+ *  added here is refused by construction. No cancellation-specific exception
+ *  exists, and none is needed for whatever lifecycle kind comes next. */
 export type DepartureState =
   | { readonly kind: 'idle' }
   | DepartingPendingState
@@ -46,6 +67,22 @@ export type DepartureState =
     }
   | {
       readonly kind: 'departed';
+      readonly placementId: string;
+      readonly artifactId: string;
+      readonly recipients: readonly string[];
+    }
+  | CancellingPendingState
+  | {
+      readonly kind: 'cancellation-failed';
+      readonly placementId: string;
+      readonly artifactId: string;
+      readonly recipients: readonly string[];
+    }
+  /** Terminal. The committed transition is `departing → cancelled`, never back
+   *  to `draft`, so nothing leaves this kind and the same Placement can neither
+   *  depart again nor have its recipients corrected. */
+  | {
+      readonly kind: 'cancelled';
       readonly placementId: string;
       readonly artifactId: string;
       readonly recipients: readonly string[];

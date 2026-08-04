@@ -53,6 +53,17 @@ export interface DepartureBundle {
   readonly onDepart: () => void;
 }
 
+/** P10-S18 — the cancellation bundle is OPTIONAL by ruling. Required props would
+ *  invalidate prior correct Composer callers and force compatibility edits this
+ *  slice is not assigned to make. It carries no lifecycle value of its own: the
+ *  lifecycle is read from the departure bundle, because there is one
+ *  authoritative lifecycle and the component may not hold a second. */
+export interface CancellationBundle {
+  /** Derived from the SAME authoritative predicate the boundary uses. */
+  readonly eligible: boolean;
+  readonly onCancel: () => void;
+}
+
 export default function Composer({
   state,
   onTextChange,
@@ -60,6 +71,7 @@ export default function Composer({
   onReturn,
   recipients,
   departure,
+  cancellation,
 }: {
   state: ComposerState;
   onTextChange: (text: string) => void;
@@ -67,13 +79,37 @@ export default function Composer({
   onReturn: () => void;
   recipients?: RecipientBundle;
   departure?: DepartureBundle;
+  cancellation?: CancellationBundle;
 }) {
+  // Cancelled is terminal: it presents what happened and offers no correction,
+  // no reopen, no departure, no cancellation, and no settlement.
+  if (departure?.state.kind === 'cancelled') {
+    return (
+      <main>
+        <p role="status">Cancelled</p>
+        <button type="button" onClick={onReturn}>
+          Back
+        </button>
+      </main>
+    );
+  }
+
   // Departed is a lifecycle state, not a draft: it presents what happened and
-  // offers no correction, no reopen, no cancellation, and no settlement.
-  if (departure?.state.kind === 'departed') {
+  // offers correction of neither recipients nor the draft. Cancel appears only
+  // when the authoritative predicate permits it and a caller supplied the
+  // bundle; its absence leaves the P10-S17 presentation exactly as it was.
+  if (departure?.state.kind === 'departed' || departure?.state.kind === 'cancelling-pending' ||
+      departure?.state.kind === 'cancellation-failed') {
     return (
       <main>
         <p role="status">Departing</p>
+        {departure.state.kind === 'cancelling-pending' ? <p role="status">Cancelling.</p> : null}
+        {departure.state.kind === 'cancellation-failed' ? <p role="status">Not cancelled.</p> : null}
+        {cancellation && cancellation.eligible ? (
+          <button type="button" onClick={cancellation.onCancel}>
+            Cancel
+          </button>
+        ) : null}
         <button type="button" onClick={onReturn}>
           Back
         </button>

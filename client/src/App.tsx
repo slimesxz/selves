@@ -46,6 +46,8 @@ import { performAdd } from './composer/recipient-add.ts';
 import { performRemove } from './composer/recipient-remove.ts';
 import { performDeparture } from './composer/departure.ts';
 import { noDeparture, permitsDeparture, type DepartureState } from './composer/departure-state.ts';
+import { performCancellation } from './composer/cancellation.ts';
+import { permitsCancellation } from './composer/cancellation-state.ts';
 import { deriveCandidates, noRecipients, type RecipientState } from './composer/recipient-state.ts';
 import { onReopenDraft, retain, type RetainedDraft } from './composer/retained-draft.ts';
 import { initialComposer, withText, type ComposerState } from './composer/state.ts';
@@ -357,6 +359,32 @@ export default function App() {
                     },
                     live,
                     liveRecipients,
+                    departureState,
+                    retainedDraft,
+                  ),
+              }
+            : undefined
+        }
+        cancellation={
+          live.kind === 'created'
+            ? {
+                // The SAME authoritative predicate the boundary uses, over the
+                // SAME one lifecycle value the departure bundle carries.
+                eligible: permitsCancellation(departureState),
+                onCancel: () =>
+                  void performCancellation(
+                    {
+                      transport: browserTransport,
+                      actingSelfId: activeSelfId,
+                      // One joint result: the cancelled lifecycle and the null
+                      // retained draft arrive together, never as two setters
+                      // that could disagree.
+                      apply: (settlement) => {
+                        setDepartureState(settlement.lifecycle);
+                        setRetainedDraft(settlement.retainedDraft);
+                      },
+                      dispositions: { onSessionExpired: sessionExpired, onForbidden: forbidden },
+                    },
                     departureState,
                     retainedDraft,
                   ),
