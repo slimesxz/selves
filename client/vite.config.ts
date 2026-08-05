@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -7,6 +8,20 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), viteSingleFile()],
+    // P10-V1 — the verification harness. jsdom is the ruled verification
+    // environment. It is scoped to the mounted-experiment directory rather than
+    // made global, because every one of the sixteen accepted client test files
+    // was accepted running under `node`; switching them wholesale would change
+    // the execution environment of accepted proofs as a side effect of building
+    // a harness. The default therefore stays `node` and is stated explicitly.
+    //
+    // `setupFiles` establishes React's act environment for every file. The flag
+    // is inert where nothing renders, so the pure files are unaffected by it.
+    test: {
+      environment: 'node',
+      environmentMatchGlobs: [['test/mounted/**', 'jsdom']],
+      setupFiles: ['./test/harness/act-environment.ts'],
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
