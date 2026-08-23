@@ -76,6 +76,42 @@ export function presentsSelection(activeSelfId: string | null): boolean {
   return activeSelfId === null;
 }
 
+/** P10-S20 — the switcher is persistent chrome (AGENTS §7), so it is available
+ *  while a Self is active and not only in the selection state. It is offered
+ *  where there is something to switch between: a single-Self account has no
+ *  second context to move to, and a one-option control is noise rather than a
+ *  choice. Availability is a presentation predicate and grants nothing. */
+export function presentsSwitcher(selves: SelfSummary[]): boolean {
+  return selves.length > 1;
+}
+
+/** P10-S20 — a deliberate switch from one active Self to another owned Self.
+ *
+ *  Switching and release are distinct operations and are not collapsed: this
+ *  never passes through the no-active-Self state, and `onSessionExpired` /
+ *  `onForbidden` remain the only paths that release.
+ *
+ *  Like `restore`, a selected id is asserted only if it still verifies against
+ *  the authoritative list — the client never invents an acting Self, and an id
+ *  the server did not return is declined rather than asserted. Verification
+ *  here is refusal to fabricate, not a grant: the server re-verifies the acting
+ *  Self on every protected request regardless of what this returns.
+ *
+ *  Returns the id to make active, or null when no switch occurs — selecting the
+ *  already-active Self is not a switch, and neither is selecting an unlisted id.
+ *  Null means "nothing changes"; it never means release. */
+export function onSwitch(
+  store: StorageLike | null,
+  selves: SelfSummary[],
+  activeSelfId: string | null,
+  selected: string,
+): string | null {
+  if (selected === activeSelfId) return null;
+  if (!selves.some((self) => self.id === selected)) return null;
+  remember(store, selected);
+  return selected;
+}
+
 /** 403: a valid session asserting an unowned Self (P10-M6). Discard the active
  *  Self and re-verify EXACTLY ONCE against the authoritative list, then return
  *  to selection. There is no retry loop: this function calls `reverify` once

@@ -279,7 +279,11 @@ describe('E2 — Correspondences, mounted', () => {
     // Exactly `onContinue()`'s value: correspondences, state `pending`.
     expect(main!.querySelector('[role="status"]')!.textContent).toBe('Loading.');
     expect(text(mounted)).not.toContain('Unavailable.');
-    expect(text(mounted)).not.toContain(COUNTERPART.name);
+    // Scoped to the Correspondences region, which is what the binding names.
+    // Persistent Self-switch chrome (P10-S20) legitimately renders sibling Self
+    // labels outside it, so whole-container text no longer represents this
+    // object. Nothing else changes: same Self, same absence, same moment.
+    expect(main!.textContent ?? '').not.toContain(COUNTERPART.name);
 
     await mounted.step(() => {
       recorder.release(PLACEMENTS_URL, { status: 200, body: PLACEMENTS });
@@ -348,7 +352,11 @@ describe('E2 — Correspondences, mounted', () => {
     });
     expect(floor(mounted), 'the late resolution wrote nothing').not.toBeNull();
     expect(correspondences(mounted)).toBeNull();
-    expect(text(mounted)).not.toContain(COUNTERPART.name);
+    // Scoped to the surface that actually rendered — the floor asserted
+    // non-null above — rather than the whole container, which now also holds
+    // persistent Self-switch chrome (P10-S20). Still non-vacuous: were the late
+    // resolution to write state, the counterpart name would appear here.
+    expect(floor(mounted)!.textContent ?? '').not.toContain(COUNTERPART.name);
   });
 
   // BINDING 15 — accepted wording:
@@ -367,8 +375,10 @@ describe('E2 — Correspondences, mounted', () => {
     const groups = [...main!.querySelectorAll('p')].map((p) => p.textContent);
     // The derived projection: the counterpart of the settled Placement.
     expect(groups).toContain(COUNTERPART.name);
-    // Not the Self list: a non-counterpart Self renders nowhere.
-    expect(text(mounted)).not.toContain(NON_COUNTERPART.name);
+    // Not the Self list: a non-counterpart Self renders nowhere in the
+    // Correspondences projection. Scoped to that region, because persistent
+    // Self-switch chrome (P10-S20) renders every owned Self's label beside it.
+    expect(main!.textContent ?? '').not.toContain(NON_COUNTERPART.name);
     // Not another state value.
     expect(text(mounted)).not.toContain('Loading.');
     expect(text(mounted)).not.toContain('Unavailable.');

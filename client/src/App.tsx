@@ -58,7 +58,9 @@ import PrismFloor from './prism/PrismFloor.tsx';
 import { onCountRequested, onCountResolved, presentsFloor } from './prism/state.ts';
 import {
   onSessionExpired,
+  onSwitch,
   presentsSelection,
+  presentsSwitcher,
   remember,
   restore,
   sessionStorageOrNull,
@@ -201,6 +203,42 @@ export default function App() {
     };
   }, [activeSelfId, sessionExpired, forbidden]);
 
+  // P10-S20 — the direct Self-to-Self switch (criterion 3's client limb). It
+  // goes A -> B and never A -> null -> B: release stays a separate operation,
+  // owned by `sessionExpired` and `forbidden` above.
+  //
+  // Selecting a context is not being granted one. `onSwitch` declines an id the
+  // authoritative list does not contain, and the server re-verifies the acting
+  // Self on every protected request regardless of what is remembered here.
+  //
+  // Each reset below discards a value that belongs to the Self being left, and
+  // nothing else is touched: `outcome` and `selves` are account-scoped, so they
+  // survive. The count is cleared through the same `onCountRequested` transition
+  // the count effect uses, at the transition rather than one commit later, so no
+  // commit ever renders one Self's count beside another Self's name. The surface
+  // returns to the Prism because a resolved Correspondences read is Self A's and
+  // its effect re-reads only from `pending`. The composer, recipient, retained
+  // and departure values all describe a draft Placement authored by Self A,
+  // which is not Self B's to continue.
+  //
+  // In-flight work needs nothing new: both Self-scoped effects are keyed on
+  // `activeSelfId` and already discard through their `cancelled` cleanup, so an
+  // A-originated response cannot settle as B's state.
+  const switchSelf = useCallback(
+    (selfId: string) => {
+      const next = onSwitch(sessionStorageOrNull(), selves, activeSelfId, selfId);
+      if (next === null) return;
+      setArtifactCount(onCountRequested(next).artifactCount);
+      setSurface(prismSurface);
+      setComposerState(initialComposer);
+      setRecipientState(noRecipients);
+      setRetainedDraft(null);
+      setDepartureState(noDeparture);
+      setActiveSelfId(next);
+    },
+    [selves, activeSelfId],
+  );
+
   // Continue's first behavior (P10-S12): the all-or-none Correspondences read
   // runs when — and only when — the surface has just been opened and its state
   // is still pending. One attempt per deliberate human act. Never on focus, on
@@ -241,6 +279,15 @@ export default function App() {
     );
   }
 
+  // P10-S20 — persistent chrome. It stands beside an active Self's surface and
+  // never inside it: the Prism floor keeps rendering exactly its three derived
+  // elements (R6), and the switcher is its neighbour, not a fourth element.
+  const chrome =
+    activeSelfId !== null && presentsSwitcher(selves) ? (
+      <SelfSwitcher selves={selves} onSelect={switchSelf} placement="chrome" />
+    ) : null;
+
+  const surfaceNode = (() => {
   if (surface.kind === 'correspondences') {
     // Compose sits beside the projection, not inside it: it annotates,
     // selects, and enters no counterpart group, and Correspondences itself is
@@ -436,4 +483,12 @@ export default function App() {
   }
 
   return <main />;
+  })();
+
+  return (
+    <>
+      {chrome}
+      {surfaceNode}
+    </>
+  );
 }
