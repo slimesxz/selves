@@ -26,26 +26,36 @@ import pg from 'pg';
 import '../../server/test/helpers/env.ts';
 import serverGlobalSetup from '../../server/test/globalSetup.ts';
 import { bootstrapPool, enroll } from '../../server/test/helpers/auth.ts';
-import { newTextArtifact, testPool } from '../../server/test/helpers/db.ts';
+// P10-BR3 — the Vitest-free fixture module. Importing `db.ts` here dragged
+// `import { expect } from 'vitest'` into Playwright's plain-Node globalSetup
+// context, which is the recorded P10-BR2 defect.
+import { newTextArtifact, testPool } from '../../server/test/helpers/db-fixtures.ts';
+import {
+  CLIENT_ORIGIN,
+  SECURE_ORIGIN,
+  SECURE_SERVER_PORT,
+  SELF_NAME,
+  SEEDED_ARTIFACTS,
+  SERVER_ORIGIN,
+} from './origins.ts';
+import { generateCertificate, startSecureVenue } from './tls.ts';
 
 const here = resolve(fileURLToPath(import.meta.url), '..');
 const SERVER_ROOT = resolve(here, '../../server');
 const CLIENT_ROOT = resolve(here, '..');
 
-export const SERVER_ORIGIN = 'http://127.0.0.1:8080';
-/** The committed Vite dev port. The browser loads the client here, and the
- *  committed proxy carries `/api` from this same origin to the server. */
-export const CLIENT_ORIGIN = 'http://localhost:5173';
-
-/** The session cookie name under the committed local configuration, where
- *  `SELVES_COOKIE_SECURE` is unset and the `__Host-` variant is therefore not
- *  emitted. The spec observes this name and makes no `__Host-` claim. */
-export const SESSION_COOKIE = 'selves_session';
-
-/** A distinctive name and a non-zero, non-default count: a blank or default
- *  render produces no floor at all, and neither value can arise by accident. */
-export const SELF_NAME = 'Refresh-Subject';
-export const SEEDED_ARTIFACTS = 5;
+// Re-exported so the committed P10-BR2 spec keeps importing exactly what it
+// already imports. The values themselves now live in the zero-import leaf.
+export {
+  ALT_CLIENT_ORIGIN,
+  CLIENT_ORIGIN,
+  SECURE_ORIGIN,
+  SECURE_SESSION_COOKIE,
+  SEEDED_ARTIFACTS,
+  SELF_NAME,
+  SERVER_ORIGIN,
+  SESSION_COOKIE,
+} from './origins.ts';
 
 export interface Fixture {
   readonly secret: string;
@@ -105,6 +115,7 @@ async function waitForOk(url: string, what: string, timeoutMs = 60_000): Promise
 }
 
 const children: ChildProcess[] = [];
+const closers: Array<() => void> = [];
 
 function start(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcess {
   const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -175,8 +186,36 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   start('npm', ['run', 'dev'], CLIENT_ROOT, { ...process.env });
   await waitForOk(CLIENT_ORIGIN, 'the Vite client');
 
+  // 6 — P10-BR3: a SECOND production server process, identical code, configured
+  //     through the committed environment path with the secure cookie flag set.
+  //     `server/src/config.ts` reads `SELVES_COOKIE_SECURE` and answers with the
+  //     `__Host-` cookie name and the Secure attribute; nothing here constructs
+  //     a cookie, renames one, or edits the production cookie implementation.
+  //     Its CORS allowlist is the https origin the browser will actually use,
+  //     because the committed origin hook refuses state-changing requests from
+  //     an origin outside the allowlist and the login act is one.
+  const secureServerEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    APP_DATABASE_URL: process.env.TEST_APP_DATABASE_URL,
+    PORT: String(SECURE_SERVER_PORT),
+    HOST: '127.0.0.1',
+    SELVES_COOKIE_SECURE: 'true',
+    SELVES_CORS_ORIGINS: SECURE_ORIGIN,
+  };
+  start(process.execPath, ['src/server.ts'], SERVER_ROOT, secureServerEnv);
+  await waitForOk(`http://127.0.0.1:${SECURE_SERVER_PORT}/health`, 'the secure-cookie server');
+
+  // 7 — P10-BR3: the TLS terminator, so the browser has a genuine secure origin
+  //     to hold a `__Host-` cookie against. It forwards bytes and decides
+  //     nothing.
+  const secureVenue = startSecureVenue(generateCertificate());
+  closers.push(() => secureVenue.close());
+
   // Teardown: nothing the apparatus started outlives the run.
   return async () => {
+    for (const close of closers.splice(0, closers.length)) {
+      close();
+    }
     for (const child of children.splice(0, children.length)) {
       child.kill('SIGTERM');
     }

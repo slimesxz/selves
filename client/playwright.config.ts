@@ -13,7 +13,13 @@
 // the browser venue out of the mounted-test tree WITHOUT editing the committed
 // Vite/Vitest configuration, which is outside this gate's ceiling.
 import { defineConfig } from '@playwright/test';
-import { CLIENT_ORIGIN } from './browser/apparatus.ts';
+// P10-BR3 — the zero-import leaf, NOT `apparatus.ts`. Playwright evaluates this
+// configuration in a plain Node context with no test runner present, so the
+// configuration's module graph must reach nothing that expects one. Importing
+// the origin from the apparatus pulled process orchestration, the server test
+// helpers, and through them `import { expect } from 'vitest'` into config load —
+// the recorded P10-BR2 defect. A leaf with no imports cannot reproduce it.
+import { CLIENT_ORIGIN } from './browser/origins.ts';
 
 export default defineConfig({
   testDir: './browser',
@@ -38,6 +44,12 @@ export default defineConfig({
     // The real browser network stack. No route interception, no request
     // fulfilment, no offline emulation, no service-worker substitution.
     serviceWorkers: 'block',
+    // P10-BR3 — the secure venue is fronted by a test-only TLS terminator with a
+    // self-signed certificate. Ignoring the certificate error changes nothing
+    // about what is observed there: `Secure` and `__Host-` cookie rules key off
+    // the https scheme, not off who signed the certificate. The non-secure cases
+    // are plain http and are unaffected by this flag.
+    ignoreHTTPSErrors: true,
     trace: 'off',
     video: 'off',
     screenshot: 'off',
