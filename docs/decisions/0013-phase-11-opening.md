@@ -98,8 +98,8 @@ artifact, or write §75 into 0012.
 | **P11-A** — adversarial coverage ledger (read-only) | **ACCEPTED with corrections.** |
 | **P11-A2** — assertion-level coverage audit (read-only) | **ACCEPTED.** |
 | **P11-B** — threat model, authorization matrix, `CLAUDE.md`, this record | **AUTHORIZED; this record is its product.** |
-| **P11-C** — gap closure | **NOT AUTHORIZED.** |
-| **P11-D** — evidence run and test report | **NOT AUTHORIZED.** |
+| **P11-C** — gap closure | **ACCEPTED**, committed at `455607415c5d2843655798ee4e91452647e79057` ("P11-C: close adversarial coverage gaps"). |
+| **P11-D** — evidence run and test report | **AUTHORIZED**; see §10. |
 | **P11-E** — known limitations and deployment blockers | **NOT AUTHORIZED.** |
 | **P11-F** — closure | **NOT AUTHORIZED.** |
 
@@ -172,7 +172,8 @@ proof.
 
 ## 5. P11A2-F1 — accepted open Phase 11 defect
 
-**Accepted by the chamber as a Phase 11 defect. Unrepaired.**
+**Accepted by the chamber as a Phase 11 defect. CLOSED in P11-C by regression
+plus minimal correction — see §10.3.**
 
 `GET /artifacts/:id`, `GET /placements/:id`, and `GET /placements/:id/recipients`
 (`src/routes/domain.ts`) pass an unvalidated path identifier to the
@@ -246,17 +247,124 @@ timing-side-channel indistinguishability.
 |---|---|
 | Threat model | **Created** — [threat-model.md](../threat-model.md) |
 | Authorization matrix | **Created** — [authorization-matrix.md](../authorization-matrix.md) |
-| Test report | **Not created.** No Phase 11 evidence run has occurred. Reserved for P11-D. |
+| Test report | **Created** — [phase-11-test-report.md](../phase-11-test-report.md) (P11-D). |
 | Known limitations (consolidated) | **Not created.** Reserved for P11-E. |
 | Deployment-blocking issues | **Not created.** Reserved for P11-E. |
 
-The three uncreated deliverables are deliberately **not** populated ahead of the
-segments that generate their evidence. Their eventual existence is reserved
+The two uncreated deliverables are deliberately **not** populated ahead of the
+segment that generates their evidence. Their eventual existence is reserved
 here; nothing in this record asserts results that have not been observed.
 
 ---
 
+## 10. P11-C acceptance, P11-D authorization, and updated coverage (amendment)
+
+*Recorded after the P11-C commit and the P11-D evidence run. Nothing in §§1–9 is
+withdrawn; this section records what the executed evidence changed.*
+
+### 10.1 · P11-C acceptance and commit
+
+**P11-C — ACCEPTED.** Committed at
+`455607415c5d2843655798ee4e91452647e79057`, parent
+`68945b10494e1d8b9a4020fa5388b3e8a57eda61`, nine authorized paths, no trailer or
+body. Work items C1, C2, C4, C5, C6 and C7 were discharged.
+
+Baseline amendments ledgered under [0011 §7.1](./0011-phase-9-outbox-projections.md):
+
+- **P11-C-BASELINE-1 · `server/src/routes/domain.ts`** — the individually
+  authorized production amendment for defect P11A2-F1, and for that defect only.
+- **P11-C-BASELINE-2 · `server/package.json`** — `fast-check` dev/test
+  dependency (Q9), `server` workspace only, never a production dependency.
+- **P11-C-BASELINE-3 · `package-lock.json`** — resolution caused solely by that
+  addition (`fast-check@4.9.0`, `pure-rand@8.4.2`; additive, zero removals).
+
+### 10.2 · P11-D authorization and the final evidence run
+
+**P11-D — AUTHORIZED** as the formal evidence-run and test-report segment.
+
+> **Final evidence run reference:** commit
+> `455607415c5d2843655798ee4e91452647e79057`, branch `master`, Node `v24.18.0`,
+> **PostgreSQL 17.10** (`selves_test`, container `selves-postgres`, image
+> `postgres:17`), migrate-from-zero, real enforcement throughout.
+>
+> **Server inherited 55 files / 445 tests · Phase 11 added 5 files / 35 tests ·
+> server total 60 / 480 · client 28 / 181 · server typecheck exit 0 · client
+> lint exit 0 · client build exit 0. All passed. Zero deltas against the
+> expected lineage.**
+
+The full record — commands, matrices, seeds, contention parameters, defects, and
+non-claims — is [phase-11-test-report.md](../phase-11-test-report.md).
+
+### 10.3 · P11A2-F1 — closed
+
+Red state `4 failed / 5 passed` was established **before** the production change;
+green state is `9 passed`, re-confirmed in the final run. The regression is
+`server/test/security/regression/p11a2-f1-malformed-path-identifiers.test.ts`.
+The correction reuses the already-ratified `mapErr` → `mapMutationError` path;
+**no new error class and no new response envelope** were introduced.
+
+> **Binding wording.** The three protected read routes now **map** malformed
+> UUID failures into the existing 400 bad-request path. **They do not
+> pre-validate UUIDs.** No subsequent artifact may claim otherwise.
+
+**Status: CLOSED. Not deployment-blocking.**
+
+### 10.4 · Updated coverage dispositions
+
+Re-evaluated against executed evidence, not copied forward. Nothing is marked
+PROVEN because a segment intended to cover it.
+
+**Playbook: 24 / 24 PROVEN** — case 22 (client tampering) moved
+**PARTIAL → PROVEN** on C1, which proves both halves independently: tampered
+client material cannot manufacture authority, and accepted responses do not emit
+protected data (asserted against raw response bytes at the production boundary).
+
+**Chamber families: 16 / 16 discharged.** Movements:
+
+| Obligation | Was | Now | Executed evidence |
+|---|---|---|---|
+| 5 · stale-decision | PARTIAL | **PROVEN** | C2 — both branches, deterministic |
+| 7c · TOCTOU | PARTIAL | **PROVEN** | C2 |
+| 10b · malformed/adversarial input | PARTIAL | **PROVEN** | C7, C4 P5 |
+| 11 · fuzz/property | ABSENT | **PROVEN** | C4 — 5 properties, 120 runs, seed 20260828 |
+| 12a · load/contention | ABSENT | **PROVEN** | C5 — 400 ops, concurrency 16, pool 6, 0 violations |
+| 12b · regression corpus | ABSENT | **ESTABLISHED** | C6 |
+
+The remaining ten obligations retain their P11-A2 dispositions, now additionally
+re-confirmed by the final run.
+
+### 10.5 · Evidence-class movement
+
+§4.1's read-path snapshot property was recorded as **architectural reasoning,
+expressly not proven adversarial resilience**. **C2 has now executed it**, so
+families 5 and 7c rest on RUNTIME + DATABASE evidence. The threat model's
+corresponding caveat is superseded in substance and should be updated in the
+next authorized documentation segment; it is **not** edited by this amendment.
+
+### 10.6 · Recorded debt, not repaired
+
+The comment in `server/src/authz/reasons.ts` describing `22P02` as "route
+validates first; belt-and-braces" is inaccurate — the routes map rather than
+validate. Recorded as **documentation/code-comment debt** in the test report per
+chamber disposition. **Not a security defect. Not a deployment blocker.**
+`reasons.ts` was not modified.
+
+### 10.7 · What this amendment does not do
+
+**It does not close Phase 11.** No new production defect was discovered in
+P11-D. The consolidated known-limitations and deployment-blocking artifacts
+remain **uncreated** and belong to a later authorized segment. P11-E and P11-F
+remain **NOT AUTHORIZED**.
+
+---
+
 ## 9. What this record does not do
+
+*This section states the position **as the opening record was filed**. It is
+preserved unaltered as history. Its segment-authorization sentence is superseded
+in part by §10, which records the later P11-C acceptance and P11-D
+authorization; the Phase 11 closure position below is NOT superseded and still
+governs.*
 
 **It does not close Phase 11.** It does not authorize P11-C, P11-D, P11-E, or
 P11-F. It does not report test results. It does not repair P11A2-F1. It does not
@@ -266,4 +374,5 @@ mounted binding, dispose a Class B proposition, or write `§75` into 0012. It
 does not authorize a commit or a push, and it performs neither.
 
 > **PHASE 11 — OPEN.**
-> **P11-C THROUGH P11-F — NOT AUTHORIZED.**
+> **P11-A · P11-A2 · P11-B · P11-C — ACCEPTED. P11-D — EXECUTED.**
+> **P11-E AND P11-F — NOT AUTHORIZED.**
