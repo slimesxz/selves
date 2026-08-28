@@ -64,6 +64,30 @@ export function registerDomainRoutes(app: FastifyInstance, deps: DomainRouteDeps
       return mapErr(reply, err);
     }
   };
+  // P11-C C7 (defect P11A2-F1): the read routes carry the SAME failure mapping
+  // the mutation routes already carry. A structurally malformed path identifier
+  // reaches PostgreSQL as 22P02, which reasons.mapMutationError already maps to
+  // the ratified 400 bad_request; without this wrapper it escaped to the generic
+  // 500 handler. No new error class and no new envelope is introduced — an
+  // unrecognized SQLSTATE is still rethrown and still yields a generic 500.
+  const runRead = async <T>(
+    reply: FastifyReply,
+    op: () => Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false }>,
+  ): Promise<FastifyReply> => {
+    try {
+      const r = await op();
+      return r.ok ? reply.code(200).send(r.value) : deny(reply);
+    } catch (err) {
+      return mapErr(reply, err);
+    }
+  };
+  const runList = async <T>(reply: FastifyReply, op: () => Promise<T[]>): Promise<FastifyReply> => {
+    try {
+      return reply.code(200).send(await op());
+    } catch (err) {
+      return mapErr(reply, err);
+    }
+  };
 
   // ── artifacts ───────────────────────────────────────────────────────────
   app.get('/artifacts', selfScoped, async (req) => service.listOwnedArtifacts(actor(req)));
@@ -72,10 +96,9 @@ export function registerDomainRoutes(app: FastifyInstance, deps: DomainRouteDeps
     if (typeof b?.text !== 'string') return reply.code(400).send({ error: 'bad_request' });
     return runId(reply, () => service.createArtifact(actor(req), b.text as string));
   });
-  app.get('/artifacts/:id', selfScoped, async (req, reply) => {
-    const r = await service.readArtifact(actor(req), idOf(req));
-    return r.ok ? reply.code(200).send(r.value) : deny(reply);
-  });
+  app.get('/artifacts/:id', selfScoped, (req, reply) =>
+    runRead(reply, () => service.readArtifact(actor(req), idOf(req))),
+  );
 
   // ── placements ──────────────────────────────────────────────────────────
   app.get('/placements', selfScoped, async (req) => service.listReadablePlacements(actor(req)));
@@ -84,14 +107,13 @@ export function registerDomainRoutes(app: FastifyInstance, deps: DomainRouteDeps
     if (typeof b?.artifactId !== 'string') return reply.code(400).send({ error: 'bad_request' });
     return runId(reply, () => service.createPlacementDraft(actor(req), b.artifactId as string));
   });
-  app.get('/placements/:id', selfScoped, async (req, reply) => {
-    const r = await service.readPlacement(actor(req), idOf(req));
-    return r.ok ? reply.code(200).send(r.value) : deny(reply);
-  });
+  app.get('/placements/:id', selfScoped, (req, reply) =>
+    runRead(reply, () => service.readPlacement(actor(req), idOf(req))),
+  );
 
   // ── recipients (frozen empty-array contract for the non-author) ─────────
-  app.get('/placements/:id/recipients', selfScoped, async (req) =>
-    service.listRecipientsOfAuthoredPlacement(actor(req), idOf(req)),
+  app.get('/placements/:id/recipients', selfScoped, (req, reply) =>
+    runList(reply, () => service.listRecipientsOfAuthoredPlacement(actor(req), idOf(req))),
   );
   app.post('/placements/:id/recipients', selfScoped, async (req, reply) => {
     const b = req.body as { recipientSelfId?: unknown } | undefined;
