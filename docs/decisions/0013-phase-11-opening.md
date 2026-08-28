@@ -99,8 +99,8 @@ artifact, or write §75 into 0012.
 | **P11-A2** — assertion-level coverage audit (read-only) | **ACCEPTED.** |
 | **P11-B** — threat model, authorization matrix, `CLAUDE.md`, this record | **AUTHORIZED; this record is its product.** |
 | **P11-C** — gap closure | **ACCEPTED**, committed at `455607415c5d2843655798ee4e91452647e79057` ("P11-C: close adversarial coverage gaps"). |
-| **P11-D** — evidence run and test report | **AUTHORIZED**; see §10. |
-| **P11-E** — known limitations and deployment blockers | **NOT AUTHORIZED.** |
+| **P11-D** — evidence run and test report | **ACCEPTED**, committed at `1edbf217c9484293ca8faa8f3c80c5f0d29e5a4e` ("P11-D: record final adversarial evidence"). See §10. |
+| **P11-E** — known limitations and deployment blockers | **AUTHORIZED**; see §11. |
 | **P11-F** — closure | **NOT AUTHORIZED.** |
 
 Two corrections were ruled against P11-A and carried here. First, the chamber
@@ -248,12 +248,12 @@ timing-side-channel indistinguishability.
 | Threat model | **Created** — [threat-model.md](../threat-model.md) |
 | Authorization matrix | **Created** — [authorization-matrix.md](../authorization-matrix.md) |
 | Test report | **Created** — [phase-11-test-report.md](../phase-11-test-report.md) (P11-D). |
-| Known limitations (consolidated) | **Not created.** Reserved for P11-E. |
-| Deployment-blocking issues | **Not created.** Reserved for P11-E. |
+| Known limitations (consolidated) | **Created** — [known-limitations.md](../known-limitations.md) (P11-E). |
+| Deployment-blocking issues | **Created** — [deployment-blockers.md](../deployment-blockers.md) (P11-E). |
 
-The two uncreated deliverables are deliberately **not** populated ahead of the
-segment that generates their evidence. Their eventual existence is reserved
-here; nothing in this record asserts results that have not been observed.
+**All five required substantive deliverables now exist.** Each was written only
+after the segment that generates its evidence had run; nothing in this record
+asserts a result that has not been observed.
 
 ---
 
@@ -358,6 +358,144 @@ remain **NOT AUTHORIZED**.
 
 ---
 
+## 11. P11-D acceptance, P11-E authority, and limitation/blocker disposition (amendment)
+
+*Recorded after the P11-D commit and the P11-E write. Nothing earlier is
+withdrawn.*
+
+### 11.1 · P11-D acceptance and commit
+
+**P11-D — ACCEPTED.** Committed at
+`1edbf217c9484293ca8faa8f3c80c5f0d29e5a4e`, parent
+`455607415c5d2843655798ee4e91452647e79057`, two paths
+(`docs/phase-11-test-report.md`, this record), no body or trailer.
+
+**Accepted final evidence posture**, from the fresh run at the P11-C boundary
+against real PostgreSQL 17.10 enforcement:
+
+> **Playbook 24 / 24 PROVEN · chamber obligations 16 / 16 discharged across the
+> 12 headings · server inherited 55 files / 445 tests + Phase 11 added 5 / 35 =
+> 60 / 480 · client 28 / 181 · server typecheck, client lint, client build all
+> exit 0 · zero deltas against the expected lineage · C1/C2/C4/C5/C7 reproduced.**
+
+This posture is accepted **as the input to disposition**. It is not closure.
+
+### 11.2 · P11-E authority and scope
+
+**P11-E — AUTHORIZED** as the limitations and deployment-blocker disposition
+segment: documentation and governance only. No production source, test source,
+dependency, schema, migration, role, grant, or client implementation changed.
+
+### 11.3 · The five required substantive deliverables
+
+| # | Deliverable | Status |
+|---|---|---|
+| 1 | Threat model | [threat-model.md](../threat-model.md) — created P11-B, reconciled P11-E |
+| 2 | Authorization matrix | [authorization-matrix.md](../authorization-matrix.md) — created P11-B |
+| 3 | Test report | [phase-11-test-report.md](../phase-11-test-report.md) — created P11-D |
+| 4 | Known limitations | [known-limitations.md](../known-limitations.md) — created P11-E |
+| 5 | Deployment-blocking issues | [deployment-blockers.md](../deployment-blockers.md) — created P11-E |
+
+### 11.4 · Threat-model reconciliation (E3)
+
+The read-path snapshot property was filed in P11-B as **ARCHITECTURAL**. C2 has
+supplied executed adversarial confirmation of **both** snapshot orderings.
+
+**The architectural derivation is retained, not erased.** A new §4.1 records the
+executed RUNTIME + DATABASE confirmation beside it, and the model states plainly
+that the confirmation upgrades the evidence class without replacing the
+reasoning. The **bounded intra-request semantics are preserved unchanged** — one
+in-flight request, never standing authority across requests — as are the Q12
+timing limitation, the T3 exclusion, and the browser-agent limitations. The §6
+gap table is retained with each row's disposition rather than deleted, so the
+history stays legible. The model was **not** rewritten around the result.
+
+### 11.5 · Limitation classification (E1)
+
+Twelve live items consolidated, none concealed, none silently discharged:
+
+| Item | Classification |
+|---|---|
+| L1 real-browser cookie / CORS / `__Host-` | **DEPLOYMENT BLOCKER** |
+| L2 browser navigation / reload / origin resolution | **DEPLOYMENT BLOCKER** |
+| L3 timing side channel (Q12) | ACCEPTED LIMITATION |
+| L4 T3 owner/host compromise | OUT OF THREAT-MODEL SCOPE |
+| L5 rate limiting / throttling / lockout | **DEPLOYMENT BLOCKER** |
+| L6 CSP / XSS hardening | **DEPLOYMENT BLOCKER** |
+| L7 not final consumer authentication | DEFERRED PRODUCT/DEPLOYMENT WORK |
+| L8 `reasons.ts` comment | ACCEPTED LIMITATION (documentation debt) |
+| L9 static-evidence bound | ACCEPTED LIMITATION |
+| L10 outbox revival scope | ACCEPTED LIMITATION |
+| L11 intra-request snapshot window | CLOSED BY CURRENT EVIDENCE (ratified property) |
+| L12 CI absent | DEFERRED PRODUCT/DEPLOYMENT WORK |
+
+**No inherited blocker was reclassified downward because Phase 11's matrix is
+green.** L1, L5 and L6 are carried at their inherited `0004` severity.
+
+### 11.6 · Deployment blockers (E2)
+
+> **PHASE 11 CLOSURE BLOCKERS: NONE.**
+> **DEPLOYMENT BLOCKERS: THREE.**
+
+| ID | Blocker | Provenance |
+|---|---|---|
+| **DB1** | No rate limiting / login throttling / account lockout | 0004, never disposed |
+| **DB2** | No real-browser cookie / `__Host-` / CORS / navigation verification | 0004, deferred to Phase 10, undisposed at its closure |
+| **DB3** | No CSP / broader XSS hardening | 0004 |
+
+Each carries provenance, affected boundary, concrete risk, **why Phase 11
+evidence does not discharge it**, and required disposition before deployment.
+**All three are inherited from 0004 at original severity** — they are exactly
+that record's deployment-blocking list.
+
+**The integrated system must not be deployed to production until DB1–DB3 are
+disposed.** None of them prevents Phase 11 from satisfying its adversarial exit
+condition, which is why they are deployment blockers and not closure blockers.
+
+### 11.6.1 · Corrected classification — credential custody is not DB4
+
+A fourth blocker ("credential custody and host integrity undischarged") was
+drafted and is **withdrawn on chamber correction**. The reasoning is recorded
+because the error is instructive.
+
+[0008 §0](./0008-row-level-security.md) excludes **T3** — a compromised owner or
+application host — from the containment guarantee. Its remark that residual
+exposure above the T2 line is *"a deployment property governed by credential
+custody and host integrity"* **characterises what lies outside the guarantee**;
+it does not impose a ratified deployment requirement. A search of the governing
+records found **no independent authority** imposing one: `0004`'s
+deployment-blocking list contains exactly DB1, DB2 and DB3 (plus R1, classified
+as deferred work), and no other record requires a secrets-management, rotation,
+backup, or host-integrity posture as a precondition of deployment.
+
+Promoting it would have converted an **OUT OF THREAT-MODEL SCOPE** limitation
+into a mandatory deployment gate without any ratified operational-security
+requirement behind it — effectively repealing by inference an exclusion Phase 11
+was expressly forbidden to repeal.
+
+**Disposition:** **L4 remains OUT OF THREAT-MODEL SCOPE.** Credential custody
+and host integrity are recorded in
+[deployment-blockers.md](../deployment-blockers.md) as **environmental
+responsibility outside the blocker set**. **Phase 11 makes no T3 containment
+claim.** The correction does not affect the conclusion that there are **zero
+Phase 11 closure blockers**.
+
+### 11.7 · No repairs (E5)
+
+Nothing was repaired in P11-E. The inherited blockers are **recorded, not
+fixed** — repair was not authorized. `server/src/authz/reasons.ts` was **not**
+modified: the blocker analysis examined whether its inaccurate comment masks a
+substantive security consequence and found none, so its disposition remains
+documentation/code-comment debt.
+
+### 11.8 · What this amendment does not do
+
+**It does not close Phase 11.** Closure belongs to **P11-F**, which remains
+**NOT AUTHORIZED**. No push is authorized. No production, test, schema, or
+dependency change occurred in this segment.
+
+---
+
 ## 9. What this record does not do
 
 *This section states the position **as the opening record was filed**. It is
@@ -374,5 +512,5 @@ mounted binding, dispose a Class B proposition, or write `§75` into 0012. It
 does not authorize a commit or a push, and it performs neither.
 
 > **PHASE 11 — OPEN.**
-> **P11-A · P11-A2 · P11-B · P11-C — ACCEPTED. P11-D — EXECUTED.**
-> **P11-E AND P11-F — NOT AUTHORIZED.**
+> **P11-A · P11-A2 · P11-B · P11-C · P11-D — ACCEPTED. P11-E — EXECUTED.**
+> **P11-F — NOT AUTHORIZED. CLOSURE BELONGS TO P11-F.**

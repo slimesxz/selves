@@ -1,0 +1,174 @@
+# Selves — deployment-blocking issues (Phase 11)
+
+- **Status:** Phase 11 working artifact. **Phase 11 is OPEN, not closed.**
+- **Date:** 2026-08-28
+- **Phase:** Playbook Phase 11 — Adversarial and security testing
+- **Authority:** [AGENTS.md](../AGENTS.md) is binding constitutional law.
+- **Companions:** [known-limitations.md](./known-limitations.md) ·
+  [threat-model.md](./threat-model.md) ·
+  [phase-11-test-report.md](./phase-11-test-report.md) ·
+  [0013](./decisions/0013-phase-11-opening.md)
+
+This is **not** a production-readiness checklist. It answers exactly one
+question:
+
+> **What unresolved issue, if any, must prevent deployment of the integrated
+> system represented by this Phase 11 boundary?**
+
+The boundary is commit `1edbf217c9484293ca8faa8f3c80c5f0d29e5a4e`, whose
+evidence is recorded in the test report: 24/24 Playbook cases proven, 16/16
+chamber obligations discharged, 480 server and 181 client tests green against
+real PostgreSQL enforcement.
+
+> **A green security test matrix does not make the application deployable.**
+> Everything Phase 11 proved concerns whether a request that reaches the
+> authorization boundary is decided correctly. Three of the four blockers below
+> concern what happens *before* or *around* that boundary — how many requests
+> may be attempted, what a browser will actually enforce, and what executes
+> inside the client origin. Phase 11 was not asked those questions and did not
+> answer them.
+
+---
+
+## The three categories, distinguished
+
+| Category | Meaning |
+|---|---|
+| **PHASE 11 CLOSURE BLOCKER** | Prevents Phase 11 from satisfying its own adversarial exit condition. The phase cannot close while one exists. |
+| **DEPLOYMENT BLOCKER** | May permit Phase 11 to close, but must prevent production deployment of the integrated system. |
+| **ACCEPTED LIMITATION / DEFERRED HARDENING** | Neither of the above. Recorded in [known-limitations.md](./known-limitations.md). |
+
+The distinction is not cosmetic. Phase 11's exit condition is about
+**adversarial evidence for the authorization system**. A missing rate limiter is
+not a gap in that evidence — it is a gap in the deployed posture. Conflating the
+two would either falsely block a phase that has done its work, or falsely ship a
+system that is not ready.
+
+---
+
+## PHASE 11 CLOSURE BLOCKERS
+
+> **NONE.**
+
+Every mandatory Playbook case and every chamber attack-family obligation is
+bound to a named, executed, passing proof
+([test report §C, §D](./phase-11-test-report.md)). The one defect discovered
+inside Phase 11's own scope — **P11A2-F1** — was closed in P11-C by regression
+plus minimal correction and re-confirmed green in the final evidence run. No
+ratified invariant fails. No obligation rests on intent.
+
+**Phase 11 is not blocked from closing by anything in this document.** Closure
+itself remains a P11-F act and is not claimed here.
+
+---
+
+## DEPLOYMENT BLOCKERS
+
+### DB1 — No rate limiting, login throttling, or account lockout
+
+| | |
+|---|---|
+| **Provenance** | [0004](./decisions/0004-auth-active-self.md), recorded verbatim as *"out of scope this phase; deployment-blocking"*. Never disposed since. |
+| **Affected boundary** | The authentication surface: `POST /auth/session`, the one route deliberately exempt from the authenticated middleware chain. Secondarily every Self-scoped route, which is reachable at unbounded rate once a session exists. |
+| **Concrete risk** | The enrollment credential is the sole authentication factor. Nothing limits guess attempts, so an attacker may attempt them continuously against a permanently valid credential. `contain_account` exists to *respond* to a compromise; nothing *prevents* the attempt. There is no lockout, no backoff, and no signal that would even surface the attempt. |
+| **Why Phase 11 evidence does not discharge it** | Every Phase 11 proof is about a single request's correctness. `auth-api` proves a wrong secret yields a generic 401 with no oracle — which is exactly right, and exactly irrelevant to how many times that 401 may be provoked. Correct rejection at unbounded rate is still an unbounded attack. |
+| **Required disposition before deployment** | Implement rate limiting / throttling / lockout on the authentication surface (Playbook Phase 13 places rate limits there), then prove it. Alternatively, an explicit chamber ruling accepting the risk for a bounded invite-only alpha with compensating controls. |
+
+### DB2 — No real-browser verification of cookie policy, `__Host-`, and CORS
+
+| | |
+|---|---|
+| **Provenance** | [0004](./decisions/0004-auth-active-self.md), *"live-browser verification deferred to Phase 10"*; Phase 10 closed without disposing it ([0012 §74.P](./decisions/0012-phase-10.md)). Combines **L1** and **L2**. |
+| **Affected boundary** | The browser–server session boundary: cookie storage and replay, `__Host-` prefix enforcement, `Secure`/`SameSite` behaviour, CORS preflight and enforcement, address-bar navigation, reload persistence. |
+| **Concrete risk** | The session cookie is the sole bearer of account authority. Its protections are **asserted server-side and never observed being enforced by a user agent**. If a real browser does not enforce what the server intends — a mis-set attribute, an origin the browser treats differently, a `__Host-` precondition unmet in the deployed scheme/path — the session could be transmitted or accepted where it should not be. The failure would be invisible to every existing test, because no existing test is a browser. |
+| **Why Phase 11 evidence does not discharge it** | `auth-api` proves the server *emits* hardened cookie attributes and answers CORS preflight correctly. C1 reaches a **real socket** with production client code — genuinely stronger than `inject()` — but its own committed header records that it *emulates* the user agent's three jobs rather than executing them, and cannot reach `App.tsx`'s `browserTransport`. Emission is proven; **enforcement by the agent is not**. |
+| **Required disposition before deployment** | A real-browser verification venue exercising cookie policy, `__Host-` enforcement, CORS enforcement, address-bar navigation, and reload persistence against the deployed scheme and origin — or a chamber ruling accepting the risk with stated compensating controls. |
+
+### DB3 — No Content-Security-Policy; no broader XSS hardening
+
+| | |
+|---|---|
+| **Provenance** | [0004](./decisions/0004-auth-active-self.md): *"No CSP / broader XSS hardening — later phase."* |
+| **Affected boundary** | The client origin, and through it every Self-scoped API route. |
+| **Concrete risk** | Requests are same-origin and the session cookie travels by default. Any script executing in the client origin therefore acts with the user's full session authority against all sixteen routes. Without a CSP there is no second line of defence if injection occurs. Artifact text is user-authored content that round-trips through the client, which is precisely the shape that rewards a CSP. |
+| **Why Phase 11 evidence does not discharge it** | C1 §2 proves the server never *emits* a forbidden dataset for the client to hide — this closes the "hide it with CSS" failure mode and is genuinely reassuring. It says nothing about code executing *inside* the client origin, which would be authorized to request exactly what the user is authorized to see. Non-emission and injection resistance are different properties. |
+| **Required disposition before deployment** | Emit a Content-Security-Policy appropriate to the deployed client, together with the standard companion headers; verify in the same real-browser venue as **DB2**. |
+
+---
+
+## Environmental responsibility — outside the blocker set
+
+### Credential custody and host integrity
+
+**Not a Phase 11-derived deployment blocker.** Recorded here because it is real
+operational work, and recorded *outside* the blocker set because promoting it
+would repeal an exclusion Phase 11 was forbidden to touch.
+
+**The reasoning, stated plainly.** [0008 §0](./decisions/0008-row-level-security.md)
+excludes **T3** — a compromised owner or application host — from the containment
+guarantee, conditional on the `selves_owner` posture assertions, which are
+proven (`authz-r8-owner-posture`). Its remark that residual exposure above the
+T2 line *"is a deployment property governed by credential custody and host
+integrity"* **characterises what lies outside the guarantee**; it does not
+impose a ratified deployment requirement. No governing decision record imposes
+one: `0004`'s deployment-blocking list contains exactly the three items **DB1**,
+**DB2**, **DB3** (plus R1, classified as deferred work), and no other record
+independently requires a secrets-management, rotation, backup, or host-integrity
+posture as a precondition of deployment.
+
+Treating "Phase 11 does not prove resilience above an expressly excluded
+boundary" as a deployment blocker would convert an **OUT OF THREAT-MODEL SCOPE**
+limitation into a mandatory gate without any ratified operational-security
+requirement behind it. That is not a conclusion Phase 11 has the authority to
+reach.
+
+> **Phase 11 makes no T3 containment claim.** It proves the **T2** line — an
+> adversary holding `selves_app`'s credential without a valid live session
+> retrieves zero rows — and nothing above it. An adversary who owns the
+> application host is outside the model and is not contained by any control
+> this phase examined or could examine.
+
+**Recorded responsibility, not a gate.** Secrets management, credential
+rotation, backup and restore, and host integrity for a target environment are
+deployment-time and operational concerns, owed to the Playbook's later
+deployment and operational phases. They should be established before production
+operation as ordinary operational diligence. **They do not appear in the blocker
+set, and Phase 11 asserts no finding about them.**
+
+## Not blockers — recorded so their absence from the list is deliberate
+
+| Item | Why not a blocker |
+|---|---|
+| **L3** timing side channel | Expressly ruled out of closure criteria by **Q12**. A *deterministic* existence-dependent branch would be an in-scope defect; none exists. |
+| **L7** not final consumer authentication | The ratified model for the invite-only stage the Playbook contemplates, with a recorded gate: **revisit before any non-invite growth**. It becomes a blocker at that growth boundary, not at this one. |
+| **L8** `reasons.ts` comment | Documentation debt. The behaviour it mis-describes is correct and directly covered by regression, so a reader misled by the comment is corrected by a failing test before shipping. **No substantive security consequence identified** — the condition the chamber set for reclassification is not met. |
+| **L9** static-evidence bound | A recorded property of the evidence, complemented by DATABASE evidence at the same boundary. |
+| **L10** outbox revival scope | Correctly scoped, correctly recorded, no operational consequence. |
+| **L11** intra-request snapshot window | The ratified prospective-revocation semantics of AGENTS.md §5, now proven in both orderings by C2. |
+| **L12** CI absent | Deferred to Phase 13 and not a property of the running system. It is, however, the reason DB1–DB3 must be re-verified rather than assumed at deployment time: nothing automatically re-runs this estate. |
+
+---
+
+## Summary
+
+| ID | Blocker | Category |
+|---|---|---|
+| — | *(none)* | **PHASE 11 CLOSURE BLOCKER** |
+| **DB1** | No rate limiting / throttling / lockout | DEPLOYMENT BLOCKER |
+| **DB2** | No real-browser cookie / `__Host-` / CORS verification | DEPLOYMENT BLOCKER |
+| **DB3** | No CSP / XSS hardening | DEPLOYMENT BLOCKER |
+
+> **Phase 11 closure blockers: NONE.**
+> **Deployment blockers: THREE. The integrated system must not be deployed to
+> production until DB1–DB3 are disposed.**
+
+**All three are inherited from [0004](./decisions/0004-auth-active-self.md) at
+their original severity** — they are exactly that record's deployment-blocking
+list. **None is closed by Phase 11's green matrix**, and none was repaired in
+Phase 11: repair was not authorized, and recording them accurately is the
+required output.
+
+Credential custody and host integrity are recorded above as **environmental
+responsibility outside the blocker set**, because the T3 exclusion they sit
+behind is expressly out of the ratified threat model and no governing record
+independently imposes them as a deployment precondition.

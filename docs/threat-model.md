@@ -117,8 +117,9 @@ operation.
 **Must not achieve:** an authorization outcome that outlives its grounds across
 requests.
 **Evidence:** RUNTIME for the cross-request property (no allow persists);
-STATIC for the absence of cross-request memoization in `src/authz/**`;
-**ARCHITECTURAL only** for the intra-request property described in §4.
+STATIC for the absence of cross-request memoization in `src/authz/**`; and, for
+the intra-request property described in §4, **RUNTIME + DATABASE** since C2 —
+see §4.1. It was ARCHITECTURAL only when this model was first filed.
 
 ### A7 — Database-credential adversary (T2)
 As §2. **Evidence:** DATABASE.
@@ -139,9 +140,13 @@ constructs.
 protected data that the client is merely expected to hide. The second is the
 Playbook §2.5 obligation — *the client must never receive a broad forbidden
 dataset and hide it cosmetically*.
-**Evidence:** RUNTIME **partial** — refusal of forged and unowned acting-Self
-assertions is established across a real socket with production client code.
-**The non-emission half is not yet established.** See §6.
+**Evidence:** **RUNTIME — both halves established by C1.** Refusal of tampered
+client material (acting-Self substitution and fabrication, path identifiers,
+body identifiers, stale client-held Self state, capability tampering,
+account-scoped body identifiers) and **non-emission**, asserted against the raw
+response bytes at the production boundary with an entitled-recipient control
+proving the detection is not vacuous. The apparatus's browser limitations are
+unchanged — see §7.
 
 ### A10 — Malformed-input adversary
 **Controls:** payload shape, field types, and identifier syntax.
@@ -149,7 +154,10 @@ assertions is established across a real socket with production client code.
 non-fail-closed outcome.
 **Evidence:** DATABASE and RUNTIME for payload-type boundaries, malformed
 bodies, and SQL-injection payloads (bound as data; never parsed as SQL).
-**Malformed path identifiers are an open defect — see §6, P11A2-F1.**
+Malformed path identifiers were an open defect (**P11A2-F1**); it is **closed**
+by C7 regression plus a minimal correction, and the three protected read routes
+now **map** malformed UUID failures into the existing 400 bad-request path —
+**they do not pre-validate UUIDs**.
 
 ### A11 — Concurrency adversary
 **Controls:** overlapping operations, connection reuse, racing lifecycle
@@ -157,8 +165,10 @@ transitions.
 **Must not achieve:** context leakage between requests, duplicated
 authority-bearing effects, illegal lifecycle results, or resurrection of
 revoked authority.
-**Evidence:** DATABASE and RUNTIME for **paired** operations and for pooled
-backend reuse. **Sustained contention is not established** — see §6.
+**Evidence:** DATABASE and RUNTIME for paired operations and pooled backend
+reuse, and — since C5 — for **sustained contention**: 400 operations at
+concurrency 16 over a 6-connection pool, zero violations, with security-semantic
+postconditions asserted afterwards.
 
 ---
 
@@ -176,11 +186,44 @@ governs the stale-decision analysis and was not previously written down.
 > as a bounded intra-request snapshot property, not as standing authority across
 > requests.
 
-**Evidence class: ARCHITECTURAL.** This is read from the committed
-implementation (`src/db.ts`, `src/authz/service.ts`), not from an executed
-adversarial experiment. **Phase 11 does not claim it as proven adversarial
-resilience.** The execution evidence is owed by the C2 work item and does not
-exist at the time of writing.
+**Evidence class when this model was first filed: ARCHITECTURAL.** The paragraph
+above was *derived* from the committed implementation (`src/db.ts`,
+`src/authz/service.ts`) rather than observed, and was expressly not claimed as
+proven adversarial resilience. **That derivation stands and is retained** — it is
+what explains *why* the behaviour holds, and it remains the reasoning a future
+reader needs.
+
+### 4.1 · Executed adversarial confirmation (C2)
+
+**The execution evidence owed by C2 now exists.** It does not replace the
+derivation above; it confirms it, and it upgrades the evidence class for this
+property from ARCHITECTURAL to **RUNTIME + DATABASE**.
+
+`server/test/security/concurrency/c2-stale-decision-snapshot.test.ts` proves
+**both orderings** against real PostgreSQL:
+
+- a ground change (Key revocation — an already-ratified *prospective* authority
+  transition) committed **before** the read transaction opens → the current
+  ground governs and the request is **denied**;
+- a ground change committed **after** the in-flight read has established its
+  snapshot → that request completes according to its established snapshot, the
+  grant is confirmed authoritatively revoked, and **the next request is
+  denied**.
+
+The synchronization is deterministic and is part of the proof: the read path's
+*first* statement (`set_acting_self`) acquires the snapshot and does not touch
+`public.key_grants`, while its *second* statement (`artifact_facts`) does. A
+session holding `ACCESS EXCLUSIVE` on that table therefore blocks the read
+strictly **after** its snapshot exists, and the block is a definite, observable
+condition. There are no sleeps, no arbitrary delays, no retry-until-it-happens
+loops, and no probabilistic success; the harness **raises** rather than
+proceeding if the wait is never observed, so it can fail but cannot pass by
+luck.
+
+**The bounded intra-request semantics are unchanged by this confirmation**: the
+window is one in-flight request long, and it is never standing authority across
+requests. Evidence detail is in
+[phase-11-test-report.md](./phase-11-test-report.md) §C and §D.
 
 The property is consistent with `AGENTS.md §5`: revocation of a capability is
 **prospective**. It ends future access; it does not reach into an operation
@@ -223,22 +266,38 @@ defect. Inspection during P11-A2 found no such branch.
 Recorded without concealment. Each is an open Phase 11 obligation, not a
 disposed one.
 
-| Gap | Adversary | Status |
-|---|---|---|
-| Client non-emission (Playbook §2.5) — accepted responses are not swept for data the acting Self is not entitled to | A9 | **PARTIAL** |
-| Intra-request stale-decision window (§4) has no execution evidence | A6 | **PARTIAL** |
-| TOCTOU: no construction races a ground change against an in-flight authorized operation | A6, A11 | **PARTIAL** |
-| **P11A2-F1** — malformed path identifiers on `GET /artifacts/:id`, `GET /placements/:id`, `GET /placements/:id/recipients` escape PostgreSQL `22P02` into the generic `500` handler, while malformed mutation inputs already receive the intended `400`. Not a protected-existence oracle (the distinguishing input class is malformed-versus-well-formed), but it violates fail-closed malformed-request expectations | A10 | **OPEN DEFECT — must be repaired with regression coverage before closure** |
-| No property/fuzz campaign over the ratified invariants; all cases are enumerated examples | A10, A11 | **ABSENT** |
-| No sustained-contention evidence; maximum concurrency exercised anywhere is two operations | A11 | **ABSENT** |
-| No permanent security regression corpus | all | **ABSENT** |
+*Every gap recorded when this model was first filed has since been discharged by
+executed evidence. The table is retained, with each row's disposition, so the
+history is legible rather than erased.*
 
-Carried forward from earlier phases and **not** disposed by Phase 11 to date:
-rate limiting / login throttling / account lockout (deployment-blocking);
-real-browser cookie, CORS, and `__Host-` verification (recorded in 0004 as
-deferred to Phase 10, which closed without disposing it — it remains an
-unresolved historical deferral); absence of CSP and broader XSS hardening; and
-the recorded fact that consumer authentication is not final.
+| Gap as first recorded | Adversary | Disposition |
+|---|---|---|
+| Client non-emission (Playbook §2.5) — accepted responses are not swept for data the acting Self is not entitled to | A9 | **DISCHARGED — C1 §2** |
+| Intra-request stale-decision window (§4) has no execution evidence | A6 | **DISCHARGED — C2** (§4.1) |
+| TOCTOU: no construction races a ground change against an in-flight authorized operation | A6, A11 | **DISCHARGED — C2** |
+| **P11A2-F1** — malformed path identifiers escaped PostgreSQL `22P02` into the generic `500` handler | A10 | **CLOSED — C7** regression plus minimal correction |
+| No property/fuzz campaign over the ratified invariants | A10, A11 | **DISCHARGED — C4** (5 properties, 120 runs, seed 20260828) |
+| No sustained-contention evidence | A11 | **DISCHARGED — C5** (400 ops, concurrency 16, pool 6) |
+| No permanent security regression corpus | all | **ESTABLISHED — C6** |
+
+**No gap in this table remains open.** The limitations that *do* remain are not
+gaps in Phase 11's adversarial evidence but bounded properties and inherited
+deployment items, consolidated with their classifications in
+[known-limitations.md](./known-limitations.md), with the deployment-blocking
+subset in [deployment-blockers.md](./deployment-blockers.md).
+
+Carried forward from earlier phases and **not** disposed by Phase 11: rate
+limiting / login throttling / account lockout (deployment-blocking); real-browser
+cookie, CORS, and `__Host-` verification (recorded in 0004 as deferred to
+Phase 10, which closed without disposing it — an unresolved historical
+deferral); absence of CSP and broader XSS hardening; and the recorded fact that
+consumer authentication is not final. Each is classified in
+[known-limitations.md](./known-limitations.md); the three that block deployment
+are **DB1–DB3** in [deployment-blockers.md](./deployment-blockers.md). The
+**T3** exclusion of §2 is unchanged and is **not** a deployment blocker:
+credential custody and host integrity are recorded there as environmental
+responsibility outside the blocker set, and **Phase 11 makes no T3 containment
+claim**.
 
 ---
 
