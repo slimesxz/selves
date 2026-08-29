@@ -1,0 +1,170 @@
+# Selves CI — Playbook Phase 13 T1, segment P13-C.
+#
+# Governing authority: docs/decisions/0015-phase-13-opening.md (Phase 13 Gate 1).
+# This workflow reports; it does not enforce. Required-status-check and branch
+# protection configuration is expressly NOT authorized (Gate 1 C.5, C.8).
+#
+# Constitutional constraints this file is built to satisfy:
+#   C.3  observability floor — nothing here logs an identifier, credential, or
+#        Artifact content. Generated role passwords are registered with the
+#        runner's masking facility before any later command receives them, and
+#        no step traces or prints them.
+#   C.4  the root package.json is closed — every command is invoked through an
+#        existing workspace script (`npm run <script> -w <workspace>`), which is
+#        the layout-independent mechanism ratified by P10-H1. No root script.
+#   C.5  the triggers below name exactly one branch, `master`. Under P10-N4 this
+#        workflow performs no operation whatsoever against the Pages deployment
+#        branch, and does not name it.
+#   C.6  the disposable PostgreSQL substrate is the committed Compose service.
+#        The server test harness reaches it through `docker compose exec`
+#        (server/bootstrap/bootstrap.sh), so a GitHub `services:` container
+#        cannot host it without altering the proven harness. Compose is used.
+#
+# What this workflow deliberately omits, and why, is recorded in the Phase 13
+# decision ledger rather than restated here. Nothing may be added to this file
+# without the ruling that authorizes it.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks — typecheck, client tests, client production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Select the pinned Node runtime from .nvmrc
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          # The exact pinned version, read from the repository's single
+          # existing declaration; it is never duplicated into this file. If
+          # the hosted runner cannot install it, this step fails closed, and
+          # server test/runtime.test.ts is the second, independent proof.
+          node-version-file: .nvmrc
+
+      - name: Install from the clean checkout (single root lockfile)
+        run: npm ci
+
+      # Covers server/src, server/test, AND the @selves/domain sources, which
+      # enter the server TypeScript program through the workspace link. The
+      # domain workspace has no independent check and needs none; no client
+      # module imports it.
+      - name: Server typecheck
+        run: npm run typecheck -w server
+
+      # The repository has no ESLint. `lint` in client/package.json is
+      # `tsc --noEmit`; the type checker is the linter here.
+      - name: Client typecheck
+        run: npm run lint -w client
+
+      - name: Client tests
+        run: npm run test -w client
+
+      # The only production build in the repository. The server has none by
+      # design: it runs TypeScript directly under Node 24 native type
+      # stripping (`node src/server.ts`), so typechecking above is what
+      # establishes its production viability. No server bundle is invented.
+      - name: Client production build
+        run: npm run build -w client
+
+  integration:
+    name: integration — real PostgreSQL, bootstrap, migrate-from-zero, server suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Select the pinned Node runtime from .nvmrc
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install from the clean checkout (single root lockfile)
+        run: npm ci
+
+      # server/bootstrap/bootstrap.sh runs `set -euo pipefail` and sources
+      # server/.env unconditionally, so the file must exist before the suite
+      # runs. server/test/helpers/env.ts never overwrites a value already in
+      # the environment, so this file is the whole configuration.
+      #
+      # The five role passwords are generated fresh on this disposable runner
+      # and masked before any downstream command can receive them. They are
+      # never committed, never stored as repository secrets, and die with the
+      # runner. The superuser credential is not generated: it is already fixed
+      # by the committed docker-compose.yml.
+      #
+      # server/.env is gitignored (server/.gitignore) and is not part of the
+      # repository write surface.
+      - name: Materialize the disposable server/.env
+        run: |
+          set -euo pipefail
+
+          migrate_pw="$(openssl rand -hex 24)";   echo "::add-mask::${migrate_pw}"
+          app_pw="$(openssl rand -hex 24)";       echo "::add-mask::${app_pw}"
+          worker_pw="$(openssl rand -hex 24)";    echo "::add-mask::${worker_pw}"
+          bootstrap_pw="$(openssl rand -hex 24)"; echo "::add-mask::${bootstrap_pw}"
+          operator_pw="$(openssl rand -hex 24)";  echo "::add-mask::${operator_pw}"
+
+          # Committed local-only Compose credential (docker-compose.yml).
+          su="selves:selves_local_dev@localhost:5432"
+          # Migrations run as selves_migrate with current_user=selves_owner.
+          owner_opt="?options=-c%20role%3Dselves_owner"
+
+          umask 077
+          cat > server/.env <<EOF
+          DATABASE_URL=postgres://${su}/selves_dev
+          TEST_DATABASE_URL=postgres://${su}/selves_test
+
+          SELVES_GOVERNED_DATABASES=selves_dev,selves_test
+
+          SELVES_MIGRATE_PASSWORD=${migrate_pw}
+          SELVES_APP_PASSWORD=${app_pw}
+          SELVES_WORKER_PASSWORD=${worker_pw}
+          SELVES_BOOTSTRAP_PASSWORD=${bootstrap_pw}
+          SELVES_OPERATOR_PASSWORD=${operator_pw}
+
+          MIGRATE_DATABASE_URL=postgres://selves_migrate:${migrate_pw}@localhost:5432/selves_dev${owner_opt}
+          APP_DATABASE_URL=postgres://selves_app:${app_pw}@localhost:5432/selves_dev
+          WORKER_DATABASE_URL=postgres://selves_worker:${worker_pw}@localhost:5432/selves_dev
+          BOOTSTRAP_DATABASE_URL=postgres://selves_bootstrap:${bootstrap_pw}@localhost:5432/selves_dev
+          OPERATOR_DATABASE_URL=postgres://selves_operator:${operator_pw}@localhost:5432/selves_dev
+
+          TEST_MIGRATE_DATABASE_URL=postgres://selves_migrate:${migrate_pw}@localhost:5432/selves_test${owner_opt}
+          TEST_APP_DATABASE_URL=postgres://selves_app:${app_pw}@localhost:5432/selves_test
+          TEST_WORKER_DATABASE_URL=postgres://selves_worker:${worker_pw}@localhost:5432/selves_test
+          TEST_BOOTSTRAP_DATABASE_URL=postgres://selves_bootstrap:${bootstrap_pw}@localhost:5432/selves_test
+          TEST_OPERATOR_DATABASE_URL=postgres://selves_operator:${operator_pw}@localhost:5432/selves_test
+          EOF
+
+      # The committed substrate, unmodified: postgres:17, the pg_isready
+      # healthcheck, and server/db/init provisioning selves_test on first
+      # start. `--wait` exits non-zero if the healthcheck never passes, so an
+      # unavailable database fails this job rather than skipping the tests
+      # that depend on it (Gate 1 C.1 clause 2 — fail-closed).
+      - name: Start the committed PostgreSQL substrate
+        run: docker compose -f docker-compose.yml up -d --wait
+
+      # This single command is the migration-from-zero proof, not merely the
+      # test run. server/test/globalSetup.ts executes on every invocation and
+      # (1) runs the convergent role bootstrap through the Compose service,
+      # (2) drops auth, domain, proj and public and re-establishes ownership,
+      # (3) migrates from zero as selves_migrate with current_user=selves_owner,
+      # throwing 'migrate-from-zero failed in test global setup' on failure.
+      # The suite cannot pass unless the schema was rebuilt from nothing.
+      # No separate migration job or post-test re-application step exists:
+      # idempotent re-application is a different proposition and would not be
+      # from-zero evidence (Gate 1 C.4).
+      - name: Server suite — bootstrap, migrate-from-zero, and 61 test files
+        run: npm run test -w server
