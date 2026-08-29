@@ -1,8 +1,9 @@
 # 0014 — Phase 12: the object-storage boundary (Gate 1 rulings, ratified design, evidence, disposition)
 
-- **Status:** **PHASE 12 — P12-E recorded.** Segments A–D are closed; this record
-  memorializes the accepted boundary, its evidence, and its dispositions.
-  Recording this disposition is **not** authorization to deploy — see §9.
+- **Status:** **PHASE 12 — CLOSED** at §10 (P12-F). Segments A–F are closed. This
+  record establishes the opening authority, the ratified design, the evidence,
+  the dispositions, and the closure. **Closure of Phase 12 is not authorization
+  to deploy** — see §9 and §10.4.
 - **Date:** 2026-08-29
 - **Phase:** Playbook Phase 12 — Object-storage boundary
 - **Ruled by:** Liberty (chamber); recorded by Claude as engineer
@@ -365,6 +366,100 @@ this record, so no existing sentence is contradicted and the extension is
 visible. Retitling them as cross-phase artifacts would rewrite accepted Phase 11
 wording and was **not** undertaken. If the chamber prefers retitling, it is a
 separate ruling.
+
+## 10. PHASE 12 CLOSURE (P12-F)
+
+### 10.1 The ratified exit condition, restated
+
+Phase 12 exits only when: a vendor-neutral object-storage boundary exists for
+future binary-bearing Artifacts **without** making `photo` a currently creatable
+product payload; authoritative metadata and authorization remain
+PostgreSQL-owned; storage identifiers confer no authority; upload and download
+authorization are ephemeral, server-controlled, and bounded to no more than five
+minutes; no permanent public object URL is exposed; a named deterministic test
+against real PostgreSQL proves that loss of a revocable Artifact-read ground
+prevents issuance of a new download authorization; the record explicitly states
+that already-disclosed bytes cannot be erased and that an already-issued
+authorization may remain usable until its bounded expiry unless the storage
+mechanism provides stronger revocation; no object-store operation manufactures an
+Artifact, Key grant, Graph edge, projection authority, or other authoritative
+fact; no photo-product or client behaviour has been introduced; the
+object-storage trust boundary and deployment implications are explicitly recorded
+without silently extending T2 or manufacturing deployment blockers by inference;
+DB1–DB3 remain accurately carried forward unless separately disposed; the
+inherited regression estate remains green; and no unratified product, ontology,
+authority, lifecycle, schema, API, projection, or client semantics have been
+introduced.
+
+### 10.2 Satisfaction, item by item
+
+| # | Exit item | Satisfied by | Evidence |
+|---|---|---|---|
+| 1 | Vendor-neutral `ObjectStorage` boundary exists | `src/storage/object-storage.ts` (§3) | STATIC — exact export and member locks; no vendor token in the tree's code |
+| 2 | Dependency-free deterministic local implementation exists | `src/storage/local-object-storage.ts` (§3) | RUNTIME — 23 byte-plane cases; no SDK, emulator, or new dependency |
+| 3 | Upload and download authorization exist **at their ratified layers** | Upload at the byte-plane port only; download through `ObjectAccessIssuer` (§3.1) | RUNTIME + STATIC |
+| 4 | Maximum lifetime server-controlled and independently bounded at 300 s | Ceiling enforced at the **port**, not by the caller; no caller-supplied TTL | RUNTIME — exactly 300 s permitted; over-ceiling, zero, negative, and non-finite refused |
+| 5 | PostgreSQL remains authoritative for Artifact-read entitlement | Issuance consumes `AuthorizationService.readArtifact` and adds no ground | RUNTIME + DATABASE |
+| 6 | A denied Artifact read causes **no** binding lookup | Issuance ordering, step 1 before step 3 (§3) | RUNTIME — `lookupCount() === 0` with a binding present |
+| 7 | Revocation prevents a **new** download authorization | The decisive test, steps 6–9 (§4) | RUNTIME + DATABASE |
+| 8 | Already-disclosed bytes cannot be erased | §5, limb 2; **L13** | RUNTIME — bytes retained after revocation |
+| 9 | An already-issued authorization remains usable only for its bounded residual lifetime | §5, limb 3; **L14** | RUNTIME — redeems after revocation while unexpired; `expired` at `now === expiresAt` |
+| 10 | Storage activity creates **no** authoritative PostgreSQL fact in the exercised proof | Row-count equality across the five authoritative tables | RUNTIME (bounded to the operations that test performs) + STATIC |
+| 11 | Key knowledge is not authority | §8.2 **O5**; the issuer accepts `artifactId` only | RUNTIME |
+| 12 | No permanent or public URL representation exists | `ObjectAuthorization` declares no `url` member | STATIC — interface-member lock |
+| 13 | Containment evidence green | 13 STATIC cases (§4) | STATIC, within the scanning scope stated in §4.1 |
+| 14 | Threat-model and deployment disposition recorded | [threat-model.md §8](../threat-model.md) O1–O10; [deployment-blockers.md](../deployment-blockers.md) Phase 12 section; §7 above | Documentary |
+| 15 | Inherited regression estate green | Server 63 files / 522 tests; client 28 files / 181 tests; both typechecks | RUNTIME |
+| 16 | No unratified semantics introduced | §3.2, §9 | STATIC + documentary |
+
+**No Phase 12 closure blocker exists.** No ratified invariant fails; no
+obligation rests on intent.
+
+### 10.3 What this closure does **not** assert
+
+Stated as prohibitions, because each is a claim a reader could mistakenly infer:
+
+- **No production provider integration.** No SDK, adapter, emulator, credential
+  mechanism, or provider selection exists. Provider work is deferred.
+- **No production binary Artifact support.** `photo` remains non-creatable;
+  `artifacts_text_only`, `text_body`, and `ArtifactPayloadType` are untouched.
+- **No production object binding.** `ObjectBindingResolver` has no production
+  implementation; the only implementation is test apparatus.
+- **No production upload authority.** No upload issuance service exists, and no
+  ratified authority answers "may this actor upload these unattached bytes?"
+- **No production HTTP or client object-storage surface.** The sixteen routes
+  remain frozen; no client file was touched in any Phase 12 segment.
+- **No retroactive erasure.** Neither disclosed bytes nor an already-issued
+  authorization can be recalled (**L13**, **L14**).
+- **No storage-credential-compromise containment.** **O10** is expressly
+  unproven and assigned to provider/deployment responsibility. The **T2** line
+  is not extended.
+- **No evidence stronger than P12-D established.** Containment is STATIC;
+  byte-plane evidence is ARCHITECTURAL with respect to any provider; the
+  row-count property is bounded to the operations its test performs (§4.1).
+
+### 10.4 Closure is not deployment authorization
+
+**DB1, DB2, and DB3 remain unchanged and unresolved.** Phase 12 produced no
+evidence bearing on any of them, had no authority to dispose any of them, and
+disposed none. Phase 12 introduced **no** new deployment blocker.
+
+> **Phase 12 closes the object-storage boundary and its evidence slice. It does
+> not deliver production binary-media handling, and it does not make the
+> integrated system deployable.**
+
+### 10.5 Segment history
+
+| Segment | Outcome |
+|---|---|
+| **P12-A** | Boundary design packet; revised after chamber review (upload issuer struck, O5 corrected, `Visible<T>` retained); **accepted** |
+| **P12-B** | `object-storage.ts`, `local-object-storage.ts`; **accepted** |
+| **P12-C** | `object-access.ts`; corrected to remove the rejected upload-issuance symbol; **accepted** |
+| **P12-D** | Apparatus plus three suites, 42 cases including the mandatory proof; **accepted** |
+| **P12-E** | This record plus four additive baseline amendments; **accepted** |
+| **P12-F** | Closure. **No later phase is authorized by this record.** |
+
+---
 
 ## 9. What this record does not do
 
