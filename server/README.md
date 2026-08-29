@@ -1,14 +1,22 @@
 # Selves — server
 
 Authoritative layer: database migrations now; API, authorization, and the
-projection worker in later phases. Standalone npm package (no workspaces yet —
-that conversion is deferred to the phase that first shares `domain/`, per
-[docs/decisions/0001-repo-boundary.md](../docs/decisions/0001-repo-boundary.md)).
+projection worker in later phases. One of three npm workspaces
+(`client`, `domain`, `server`) sharing a single root lockfile — the conversion
+foreseen by
+[docs/decisions/0001-repo-boundary.md](../docs/decisions/0001-repo-boundary.md)
+was performed in Playbook Phase 10. Dependencies install from the repository
+root, not from this directory.
 
 ## Prerequisites
 
 - **Docker Desktop** (for local PostgreSQL)
-- **Node.js ≥ 20.6** (uses the built-in `--env-file`; developed on Node 25)
+- **Node.js 24.18.0** — the ratified runtime pin
+  ([docs/decisions/0004-auth-active-self.md](../docs/decisions/0004-auth-active-self.md)).
+  Enforced by root `.nvmrc`, `engines: ">=24.18.0 <25"`, and
+  `server/.npmrc` `engine-strict=true`. Node 25 is **rejected**; a newer major
+  will refuse to install. Env loading uses Node's built-in `--env-file`, so no
+  `dotenv` dependency exists.
 
 ## First-time setup
 
@@ -16,15 +24,17 @@ that conversion is deferred to the phase that first shares `domain/`, per
 # 1. From the repo root, start PostgreSQL (one command):
 docker compose up -d
 
-# 2. In this directory, install server dependencies and configure env:
-cd server
+# 2. From the repo root, install all workspaces (one root lockfile):
 npm install
+
+# 3. In this directory, configure env:
+cd server
 cp .env.example .env        # local-only values; edit only if you changed compose
 
-# 3. Run migrations from zero (dev database):
+# 4. Run migrations from zero (dev database):
 npm run migrate
 
-# 4. Run migrations against the isolated test database:
+# 5. Run migrations against the isolated test database:
 npm run migrate:test
 ```
 

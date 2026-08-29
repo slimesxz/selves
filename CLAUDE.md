@@ -24,6 +24,12 @@ Playbook Phases P1–P12 are complete and ratified (decision records
 0014: it establishes the vendor-neutral object-storage boundary and its
 evidence slice only. It is not production binary-media delivery — `photo`
 remains a non-creatable payload, and there is no production object binding,
-upload authority, provider adapter, HTTP route, or client surface. No further
-phase is authorized; phases are authorized one at a time by ruling, and work
-stops at each segment boundary.
+upload authority, provider adapter, HTTP route, or client surface.
+
+Playbook Phase 13 (CI, observability, and operational safety) is OPEN. Its
+Gate 1 is accepted and recorded in decision record 0015, which carries the
+governing exit condition, the observability floor ("Phase 13 may observe the
+machine. It may not observe the person."), and the segmentation. Currently
+authorized: P13-B only — governance and documentation writes. P13-C onward and
+all implementation are NOT authorized. Phases and segments are authorized one
+at a time by ruling, and work stops at each segment boundary.
