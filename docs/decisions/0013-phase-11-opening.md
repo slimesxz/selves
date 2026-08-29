@@ -1,7 +1,8 @@
 # 0013 — Phase 11: Adversarial and security testing (opening authority, Gate 1 rulings, coverage disposition)
 
-- **Status:** **Phase 11 is OPEN, not closed.** This record establishes opening
-  authority and the accepted coverage posture. It carries no closure.
+- **Status:** **PHASE 11 — CLOSED** at §12 (P11-F). This record establishes the
+  opening authority, the segment history, the accepted coverage posture, and the
+  closure. **Closure of Phase 11 is not authorization to deploy** — see §12.5.
 - **Date:** 2026-08-28
 - **Phase:** Playbook Phase 11 — Adversarial and security testing
 - **Ruled by:** Liberty (chamber); recorded by Claude as engineer
@@ -269,8 +270,18 @@ withdrawn; this section records what the executed evidence changed.*
 `68945b10494e1d8b9a4020fa5388b3e8a57eda61`, nine authorized paths, no trailer or
 body. Work items C1, C2, C4, C5, C6 and C7 were discharged.
 
-Baseline amendments ledgered under [0011 §7.1](./0011-phase-9-outbox-projections.md):
+Baseline amendments ledgered under [0011 §7.1](./0011-phase-9-outbox-projections.md).
+The **complete** Phase 11 baseline-amendment ledger is the four entries below —
+one from P11-B and three from P11-C. It is closed at four
+(see [§12.1](#121--f1--the-complete-phase-11-baseline-amendment-ledger)):
 
+- **P11-B-BASELINE-1 · `CLAUDE.md`** — pre-Phase-11 baseline file, governed by
+  0011 §7.1. Governance-only correction authorized by **Q1**: **one hunk,
+  `+5 / −4`**, replacing the materially stale authorization posture ("No phase
+  beyond P7-E is authorized") with the current Phase 11 posture. **No
+  constitutional rule, no historical ruling, no product semantics, and no
+  implementation semantics changed.** Committed in
+  `68945b10494e1d8b9a4020fa5388b3e8a57eda61`.
 - **P11-C-BASELINE-1 · `server/src/routes/domain.ts`** — the individually
   authorized production amendment for defect P11A2-F1, and for that defect only.
 - **P11-C-BASELINE-2 · `server/package.json`** — `fast-check` dev/test
@@ -351,7 +362,9 @@ chamber disposition. **Not a security defect. Not a deployment blocker.**
 
 ### 10.7 · What this amendment does not do
 
-**It does not close Phase 11.** No new production defect was discovered in
+*As of the P11-D amendment. Superseded on the closure question by §12.*
+
+**It did not close Phase 11.** No new production defect was discovered in
 P11-D. The consolidated known-limitations and deployment-blocking artifacts
 remain **uncreated** and belong to a later authorized segment. P11-E and P11-F
 remain **NOT AUTHORIZED**.
@@ -490,27 +503,183 @@ documentation/code-comment debt.
 
 ### 11.8 · What this amendment does not do
 
-**It does not close Phase 11.** Closure belongs to **P11-F**, which remains
-**NOT AUTHORIZED**. No push is authorized. No production, test, schema, or
+*As of the P11-E amendment. Superseded on the closure question by §12.*
+
+**It did not close Phase 11.** Closure belonged to **P11-F**, which was not yet
+authorized at that time. No push is authorized. No production, test, schema, or
 dependency change occurred in this segment.
+
+---
+
+## 12. PHASE 11 CLOSURE (P11-F)
+
+*The closure record. It rests on the P11-F read-only audit performed at
+`d5d6c8f25e78a141e58d941247d435810c02dbdf`, and on the accepted evidence in
+[phase-11-test-report.md](../phase-11-test-report.md). No evidence was reopened
+and no implementation was touched to produce it.*
+
+### 12.1 · F1 — the complete Phase 11 baseline-amendment ledger
+
+The P11-F audit found the ledger incomplete: the P11-B `CLAUDE.md` amendment had
+been reported and accepted in transmission but never entered the record, and
+**0011 §7.1** provides that the amendment ledger *is* chamber record. The entry
+is now present at §10.1.
+
+**The complete Phase 11 baseline-amendment ledger is exactly four files:**
+
+| # | Baseline file | Segment | Commit |
+|---|---|---|---|
+| 1 | `CLAUDE.md` | P11-B | `68945b1` |
+| 2 | `server/package.json` | P11-C | `4556074` |
+| 3 | `package-lock.json` | P11-C | `4556074` |
+| 4 | `server/src/routes/domain.ts` | P11-C | `4556074` |
+
+**The ledger is closed at four.** Phase 11-native documents — this record and the
+five substantive deliverables — are **additions**, not baseline amendments, and
+later modification of a Phase-11-native document creates no fifth entry.
+
+### 12.2 · F2 — the governing exit condition
+
+> **The integrated system withstands adversarial use, not merely expected
+> flows.**
+
+**The P11-F audit finds this condition SATISFIED**, on the following accepted
+evidence rather than by assertion:
+
+- **24 / 24** mandatory Playbook cases **PROVEN**, each bound to a named,
+  executed, passing test with its boundary and decisive assertion recorded.
+- **16 / 16** independently accounted chamber obligations **discharged** across
+  the twelve headings, with sub-obligations separately visible and stale-session
+  bound independently of stale-decision.
+- **Permission-critical evidence reaches real PostgreSQL** (17.10), each role
+  connecting as itself, so privilege denials, RLS zero-row results and opaque
+  session failures are decided by the database — including the **T2**
+  containment proof.
+- **Deterministic race and TOCTOU evidence**: ordered lifecycle races via
+  observed lock waits, and C2's construction placing a committed ground change
+  strictly after an in-flight read's snapshot — both raising rather than passing
+  when their synchronization does not hold.
+- **Property testing** over ratified invariants with deterministic replay
+  (`fast-check` 4.9.0, seed `20260828`, 120 runs), including stateful lifecycle
+  sequences checked against an independent model after every step.
+- **Contention and pooled-reuse evidence**: 400 overlapping operations at
+  concurrency 16 over a 6-connection pool, zero violations, with connections
+  proven to return to a fail-closed state.
+- **Permanent regression coverage** for the one genuine in-scope defect
+  (P11A2-F1), preserved in a durable corpus with a stated preservation rule.
+- **The inherited estate remains green** — 55 files / 445 tests unchanged —
+  alongside 5 / 35 added, with typecheck, lint and build clean.
+- **No unratified semantic expansion**: one production file changed, no route
+  added or removed, no new error class or envelope, and no forbidden vocabulary
+  introduced.
+
+The evidence is adversarial in construction rather than confirmatory: it
+tampers, races, generates, and contends, and it records what it cannot reach.
+
+### 12.3 · F3 — clause-by-clause closure audit
+
+Underlying evidence resides in
+[phase-11-test-report.md](../phase-11-test-report.md) §§A–I; this table records
+the dispositions.
+
+| # | Exit-condition clause | Verdict |
+|---|---|---|
+| 1 | All 24 mandatory Playbook cases have recorded dispositions | **PASS** |
+| 2 | Every chamber attack family / sub-obligation has a recorded disposition | **PASS** |
+| 3 | Every required security claim has named deterministic evidence or an accepted chamber disposition | **PASS** |
+| 4 | Permission-critical claims reach real PostgreSQL where applicable | **PASS** |
+| 5 | Concurrency-sensitive invariants have controlled adversarial evidence | **PASS** |
+| 6 | Property/fuzz testing exercised the ratified invariants with deterministic reproduction | **PASS** |
+| 7 | Load/contention established security semantics under pooled reuse | **PASS** |
+| 8 | Every genuine discovered in-scope defect has permanent regression coverage | **PASS** |
+| 9 | All five required substantive deliverables exist | **PASS** |
+| 10 | Known limitations and deployment blockers are stated without concealment | **PASS** |
+| 11 | The complete pre-Phase-11 regression estate remains green | **PASS** |
+| 12 | No unratified product, ontology, authority, lifecycle, schema, API, or client semantics introduced | **PASS** |
+
+**Additional audits:**
+
+| Item | Verdict |
+|---|---|
+| P11A2-F1 closure (red → green, permanent regression) | **PASS** |
+| Complete Phase 11 amendment ledger | **PASS** *(after F1)* |
+| Phase 10 closure → P11-E commit sequence (4 commits, subject-only, no trailers) | **PASS** |
+| `main` / `origin/main` non-operation (P10-N4) | **PASS** |
+| Forbidden schema / role / catalog changes absent | **PASS** |
+| DB1–DB3 remain unresolved deployment blockers and are **not** Phase 11 closure blockers | **PASS** |
+| Governing sentence recorded and satisfied | **PASS** *(after F2)* |
+
+### 12.4 · F4 — closure
+
+> **PHASE 11 — CLOSED.**
+>
+> **PHASE 11 ADVERSARIAL / SECURITY EXIT CONDITION — SATISFIED.**
+> **PHASE 11 EXIT CLAUSES — 12 / 12 PASS.**
+> **PLAYBOOK CASES — 24 / 24 PROVEN. CHAMBER OBLIGATIONS — 16 / 16 DISCHARGED.**
+> **PHASE 11 CLOSURE BLOCKERS — NONE.**
+
+This is a constitutional phase closure.
+
+### 12.5 · Three propositions, deliberately distinguished
+
+The distinction below is **load-bearing** and must not be collapsed by any later
+reader or artifact.
+
+| Proposition | Status |
+|---|---|
+| **Phase 11 adversarial/security exit condition** | **SATISFIED** |
+| **Phase 11** | **CLOSED** |
+| **Production deployment readiness** | **NOT ESTABLISHED** |
+
+> **Closing Phase 11 is not authorization to deploy.**
+
+Deployment readiness is **not established** because **DB1**, **DB2** and **DB3**
+remain **unresolved**:
+
+| ID | Unresolved blocker | Provenance |
+|---|---|---|
+| **DB1** | No rate limiting / login throttling / account lockout | 0004, never disposed |
+| **DB2** | No real-browser cookie / `__Host-` / CORS / navigation verification | 0004, deferred to Phase 10, undisposed at its closure |
+| **DB3** | No CSP / broader XSS hardening | 0004 |
+
+**None of the three is closed, discharged, or mitigated by this closure.** They
+are carried at their inherited `0004` severity and remain open work, recorded in
+[deployment-blockers.md](../deployment-blockers.md). They are **deployment**
+blockers, not Phase 11 **closure** blockers — which is precisely why Phase 11 may
+close while deployment may not proceed.
+
+**T3** (compromised owner / application host) remains **outside the ratified
+threat model**; Phase 11 makes **no T3 containment claim**, and credential
+custody and host integrity are recorded as environmental responsibility outside
+the blocker set.
+
+### 12.6 · What this closure does not do
+
+It does **not** authorize deployment. It does **not** resolve DB1–DB3. It does
+**not** authorize a push — the closure commit and any push remain separate
+chamber acts. It does **not** reopen Phase 10, close any of the eleven OPEN
+mounted bindings, dispose any of the sixteen Class B propositions, repair or
+rerun P10-BR2, touch the BR5 runtime artifact, or write `§75` into 0012. It does
+**not** repair the recorded `reasons.ts` documentation debt. It performs no
+operation on `main` or `origin/main`, and **P10-N4 is preserved permanently**.
 
 ---
 
 ## 9. What this record does not do
 
-*This section states the position **as the opening record was filed**. It is
-preserved unaltered as history. Its segment-authorization sentence is superseded
-in part by §10, which records the later P11-C acceptance and P11-D
-authorization; the Phase 11 closure position below is NOT superseded and still
-governs.*
+*This section states the position **as the opening record was filed**, and is
+preserved unaltered as history. **It is not a current-status statement.** Its
+segment-authorization sentence is superseded by §§10–11 (P11-C acceptance,
+P11-D and P11-E), and its closure sentence is superseded by **§12**, which
+records Phase 11 as CLOSED. Read what follows as of the opening act only.*
 
-**It does not close Phase 11.** It does not authorize P11-C, P11-D, P11-E, or
-P11-F. It does not report test results. It does not repair P11A2-F1. It does not
+**It did not close Phase 11.** It did not authorize P11-C, P11-D, P11-E, or
+P11-F. It did not report test results. It does not repair P11A2-F1. It does not
 discharge any carried limitation. It does not add a dependency. It does not
 modify production source or test source. It does not reopen Phase 10, close a
 mounted binding, dispose a Class B proposition, or write `§75` into 0012. It
 does not authorize a commit or a push, and it performs neither.
 
-> **PHASE 11 — OPEN.**
-> **P11-A · P11-A2 · P11-B · P11-C · P11-D — ACCEPTED. P11-E — EXECUTED.**
-> **P11-F — NOT AUTHORIZED. CLOSURE BELONGS TO P11-F.**
+> **PHASE 11 — CLOSED** (§12).
+> **P11-A · P11-A2 · P11-B · P11-C · P11-D · P11-E · P11-F — COMPLETE.**
+> **EXIT CONDITION — SATISFIED. DEPLOYMENT READINESS — NOT ESTABLISHED.**

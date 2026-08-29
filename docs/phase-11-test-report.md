@@ -1,6 +1,6 @@
 # Selves — Phase 11 security test report
 
-- **Status:** Phase 11 working artifact. **Phase 11 is OPEN, not closed.**
+- **Status:** Phase 11 artifact. **Phase 11 closed under decision record [0013](./decisions/0013-phase-11-opening.md) §12.**
 - **Date:** 2026-08-28
 - **Phase:** Playbook Phase 11 — Adversarial and security testing
 - **Authority:** [AGENTS.md](../AGENTS.md) is binding constitutional law. Where
@@ -339,3 +339,11 @@ on them.
 7. **This report does not close Phase 11.** Known limitations and
    deployment-blocking issues remain unfinalised and belong to a later
    authorized segment.
+
+   *Temporal scope: this statement records the posture at the P11-D
+   evidence-report boundary. Known limitations and deployment blockers were
+   subsequently finalized in P11-E
+   ([known-limitations.md](./known-limitations.md),
+   [deployment-blockers.md](./deployment-blockers.md)); Phase 11 closure was
+   recorded later in decision record
+   [0013](./decisions/0013-phase-11-opening.md) §12.*

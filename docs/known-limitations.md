@@ -1,6 +1,6 @@
 # Selves — consolidated known limitations (Phase 11)
 
-- **Status:** Phase 11 working artifact. **Phase 11 is OPEN, not closed.**
+- **Status:** Phase 11 artifact. **Phase 11 closed under decision record [0013](./decisions/0013-phase-11-opening.md) §12.**
 - **Date:** 2026-08-28
 - **Phase:** Playbook Phase 11 — Adversarial and security testing
 - **Authority:** [AGENTS.md](../AGENTS.md) is binding constitutional law. Where
