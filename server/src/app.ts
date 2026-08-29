@@ -50,6 +50,52 @@ const DEFAULT_REDACT = {
   censor: '[redacted]',
 };
 
+// P13-D — the ratified request/error log vocabulary (decision 0015 Gate 1 C.3;
+// P13-D rulings E.2, E.3, E.6). The governing strategy is STRUCTURAL OMISSION:
+// every emitted field is constructed by explicit allowlist, so a value not
+// named here cannot reach a log record. Nothing is hashed, pseudonymized, or
+// pattern-redacted — the forbidden values are omitted by never being read, so a
+// new field appearing upstream cannot leak through them.
+// pino's standard err serializer copies EVERY enumerable own property of the
+// error. A PostgreSQL error carries detail, where, internalQuery, table and
+// constraint; detail renders a row's own values verbatim, which is exactly the
+// actor-to-resource tuple C.3 forbids. Message and stack are omitted for the
+// same reason: a message echoes caller input (22P02 quotes it back), and a
+// stack embeds the message in its first line. Classification only.
+//
+// Fastify's own type requires an err serializer to return message and
+// stack, which the ratified allowlist forbids emitting. The assertion below
+// adjusts the TYPE only: the runtime record is exactly the one or two fields
+// constructed here, and observability.test.ts proves at runtime that neither
+// message nor stack — nor any other error property — reaches the output.
+type ErrSerializer = (err: FastifyError) => { [key: string]: unknown; type: string; message: string; stack: string };
+
+const safeErrSerializer = ((err: unknown) => {
+  const e = err as { constructor?: { name?: string }; name?: string; code?: unknown };
+  const type = e?.constructor?.name ?? e?.name ?? 'Error';
+  return typeof e?.code === 'string' ? { type, code: e.code } : { type };
+}) as unknown as ErrSerializer;
+
+const SAFE_SERIALIZERS = {
+  // Fastify's own req serializer emits url, host, remoteAddress and remotePort.
+  // The url carries caller-supplied Artifact and Placement identifiers, making
+  // each line an actor-to-resource record; the other three are caller-
+  // identifying network metadata outside the ruled diagnostic floor. None of
+  // the four is read. route is the framework's MATCHED template, e.g.
+  // /artifacts/:id, never the instantiated path. Where nothing matched there is
+  // no safe template and the field is null: there is deliberately no fallback
+  // to the raw URL, so an unrouted request discloses nothing about its target.
+  req(request: FastifyRequest) {
+    return { method: request.method, route: request.routeOptions.url ?? null };
+  },
+  err: safeErrSerializer,
+  // res is deliberately NOT overridden. Fastify's own res serializer already
+  // emits exactly { statusCode } and nothing else, so an override would restate
+  // the default while adding a second thing to keep correct. The shape is not
+  // left to trust: observability.test.ts asserts at runtime that a res record's
+  // keys are exactly ['statusCode'], so a future framework widening fails there.
+};
+
 function sessionCookieOptions(config: AppConfig) {
   // HttpOnly, host-only (no Domain), Path=/, SameSite=Strict, Secure in secure envs,
   // Max-Age = the exact session lifetime.
@@ -121,6 +167,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     logger: {
       level: 'info',
       redact: DEFAULT_REDACT,
+      serializers: SAFE_SERIALIZERS,
       ...(opts.logStream ? { stream: opts.logStream } : {}),
     },
   });

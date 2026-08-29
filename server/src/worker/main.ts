@@ -15,6 +15,20 @@ function log(entry: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`);
 }
 
+// P13-D (ruling E.5) — allowlisted error classification. A database or runtime
+// error message can carry row values, DEFINER-function context, or internal
+// SQL: a connection failure names the database, and a constraint failure's
+// detail renders the offending row. None of that is operational telemetry, so
+// the worker emits the classification only, on the same rule as the server's
+// err serializer. Kept local rather than shared: there are exactly two call
+// sites, on opposite sides of the credential boundary (0011 Q10), and a shared
+// module would exist only to deduplicate four lines.
+function errorClass(err: unknown): { type: string; code?: string } {
+  const e = err as { constructor?: { name?: string }; name?: string; code?: unknown };
+  const type = e?.constructor?.name ?? e?.name ?? 'Error';
+  return typeof e?.code === 'string' ? { type, code: e.code } : { type };
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const pool = workerPool();
@@ -52,7 +66,7 @@ while (!stopping) {
       });
     }
   } catch (err) {
-    log({ msg: 'pass failed', error: err instanceof Error ? err.message : String(err) });
+    log({ msg: 'pass failed', ...errorClass(err) });
   }
   await sleep(POLL_INTERVAL_MS);
 }
