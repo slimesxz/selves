@@ -12,6 +12,11 @@
   the database/RLS boundary and are restated unchanged in §2.
 - **Recorded by:** Claude as engineer, under the Phase 11 Gate 1 chamber rulings
   recorded in [0013](./decisions/0013-phase-11-opening.md).
+- **Phase 12 amendment:** extended by
+  [0014](./decisions/0014-phase-12-object-storage.md) with **§8**, the
+  object-storage trust boundary. Sections 1–7 are unchanged and **T1/T2/T3 are
+  not widened**: the object store is an additional trust boundary with
+  separately stated guarantees.
 
 ---
 
@@ -311,3 +316,67 @@ claim**.
   a browser, address-bar navigation, reload persistence, and browser-origin
   resolution remain outside what that apparatus executes.
 - It does not describe the §4 snapshot property as proven resilience.
+
+---
+
+## 8. Phase 12 extension — the object-storage trust boundary
+
+Recorded under [0014](./decisions/0014-phase-12-object-storage.md). Phase 12 is
+**Boundary Only**: `photo` is not a creatable Artifact payload, there is no
+production HTTP route, no production caller, and no provider adapter. What
+follows models the boundary that a future binary-bearing Artifact slice will
+consume, and the properties Phase 12 actually proved about it.
+
+**§7's disclaimers remain in force** and are extended by §8.4.
+
+### 8.1 The boundary is separate from the database boundary
+
+> **The object store is an additional trust boundary. It is not inside T2.**
+
+T1, T2, and T3 in §2 remain authoritative, unchanged, and scoped to the
+PostgreSQL/RLS boundary. Compromise of the object store is a **different event**
+from compromise of PostgreSQL, and satisfaction of the T2 containment line says
+**nothing** about it. In particular, **compromise of storage-driver credentials
+is not claimed to be contained by T2, or by any control this phase examined.**
+
+Two structural facts bound what an object-store compromise reaches: the store
+holds bytes and no principal, policy, or authorization state; and no
+authorization question anywhere in the system is answered by consulting it.
+
+### 8.2 The adversary catalogue O1–O10
+
+| ID | Adversary / event | Must not achieve | Disposition and evidence |
+|---|---|---|---|
+| **O1** | **Object-store compromise**, distinct from PostgreSQL compromise | Any authorization ground; any authoritative fact | Bytes held in the store are readable by whoever holds the store. **No ground is obtainable**: the store contains no authorization state and is never consulted by a decision. *(ARCHITECTURAL for the compromise itself; STATIC for "the boundary names no authoritative surface and holds no database handle".)* |
+| **O2** | **Leaked upload or download authorization** | Unbounded access | A bearer credential; exposure is bounded by the ratified lifetime (≤ 300 s). It names one object and one mode. *(RUNTIME)* |
+| **O3** | **Replay before expiry** | — | **Succeeds by design.** An unexpired credential is redeemable by whoever holds it. Recorded, not concealed. *(RUNTIME)* |
+| **O4** | **Replay after expiry** | Access after the bound | Denied. Redemption is valid strictly while `now < expiresAt`; at `now === expiresAt` it is `expired`. Proven by advancing an injected clock — no sleeps. *(RUNTIME)* |
+| **O5** | **Object-key guessing** | Entitlement from an identifier | **No untrusted or external principal supplies an `ObjectKey` to the application-level issuer.** Issuance is addressed by `artifactId`; the key is resolved internally, and only after the authoritative allow. The byte-plane port *does* accept a key from its trusted internal caller, and possession of a key is still insufficient: redemption additionally requires a valid, unexpired, mode-correct credential. **Key secrecy is defence in depth, never an authorization ground.** *(RUNTIME)* |
+| **O6** | **Confused-deputy issuance** | Issuance for a principal without authority | Bounded by the PostgreSQL-first ordering: `readArtifact` executes first, and a denied read causes **zero** binding lookups. The acting Self comes from the verified request context, never from an argument. *(RUNTIME)* |
+| **O7** | **Authorization minted before revocation, exercised after** | — | **Remains usable until its bounded expiry.** Phase 12 provides no stronger revocation guarantee, and the port deliberately exposes no revocation operation — a presigned-URL provider could not honour one. The short lifetime is what bounds the residual exposure. Proven in both limbs. *(RUNTIME)* — recorded as **L14**. |
+| **O8** | **Authorization requested after revocation** | A fresh capability | **Not issued.** Loss of the revocable Artifact-read ground yields opaque `{ ok: false }`, indistinguishable from every other denial. This is the mandatory Phase 12 proof. *(RUNTIME + DATABASE)* |
+| **O9** | **Permanent or public URL exposure** | A durable unauthenticated fetch path | **Outside the Phase 12 representation.** `ObjectAuthorization` declares no `url` member; no URL form of an authorization exists to leak or persist. *(STATIC, by interface-member lock)* |
+| **O10** | **Storage-driver credential compromise** | — | **Provider/deployment responsibility.** Phase 12 selects no provider, ships no adapter, and **proves nothing here**. Not contained by T2. *(No evidence. Recorded as unproven.)* |
+
+### 8.3 What storage activity cannot manufacture
+
+No object-store operation produces an Artifact, an association, a Key grant, a
+Graph edge, a projection row, or an outbox event. A successful upload creates
+private byte-plane state and nothing else. *(RUNTIME by authoritative row-count
+equality across `artifacts`, `placements`, `placement_recipients`, `key_grants`,
+and `outbox_events`; STATIC as to the source-level absence of any write path.)*
+
+Upload authorization additionally confers **no** authority over an authoritative
+Artifact. Phase 12 ratifies no production upload issuance service, because no
+production authority for unattached uploads has been ratified.
+
+### 8.4 What §8 does not establish
+
+- It does not extend the T2 containment line, and it makes **no** claim that
+  storage-credential compromise is contained.
+- It does not model any cloud provider's signed-request semantics. All
+  byte-plane evidence is over the dependency-free local driver.
+- It does not claim retroactive erasure of disclosed bytes (**L13**) or of an
+  already-issued authorization (**L14**).
+- It does not introduce a deployment blocker; see
+  [deployment-blockers.md](./deployment-blockers.md).

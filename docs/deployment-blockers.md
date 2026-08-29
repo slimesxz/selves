@@ -8,6 +8,11 @@
   [threat-model.md](./threat-model.md) ·
   [phase-11-test-report.md](./phase-11-test-report.md) ·
   [0013](./decisions/0013-phase-11-opening.md)
+- **Phase 12 amendment:** extended by
+  [0014](./decisions/0014-phase-12-object-storage.md) with the object-storage
+  deployment-boundary analysis below. **DB1–DB3 are textually unchanged and
+  remain unresolved**, and **Phase 12 adds no blocker** — the summary at the
+  end of this document is unchanged.
 
 This is **not** a production-readiness checklist. It answers exactly one
 question:
@@ -146,6 +151,54 @@ set, and Phase 11 asserts no finding about them.**
 | **L10** outbox revival scope | Correctly scoped, correctly recorded, no operational consequence. |
 | **L11** intra-request snapshot window | The ratified prospective-revocation semantics of AGENTS.md §5, now proven in both orderings by C2. |
 | **L12** CI absent | Deferred to Phase 13 and not a property of the running system. It is, however, the reason DB1–DB3 must be re-verified rather than assumed at deployment time: nothing automatically re-runs this estate. |
+
+---
+
+## Object-storage deployment boundary (Phase 12)
+
+Recorded under [0014 §7](./decisions/0014-phase-12-object-storage.md). Phase 12
+added a **vendor-neutral object-storage boundary** for future binary-bearing
+Artifacts. It is **Boundary Only**: `photo` is not a creatable payload, there is
+no production HTTP route, no production caller, no provider adapter, and no
+schema change.
+
+> **A new trust boundary is not, by itself, a deployment blocker.** The **DB4**
+> lesson is controlling: an excluded or deferred concern is not transformed into
+> a blocker by adjacency or inference. Each issue below is classified on its own
+> footing.
+
+| # | Issue | Classification |
+|---|---|---|
+| 1 | Download issuance is subordinate to the authoritative PostgreSQL Artifact-read decision; a denied read causes zero binding lookups | **Security property proven by Phase 12** |
+| 2 | Upload and download authorization lifetimes are bounded at 300 s, enforced at the port; expiry is exact and deterministic | **Security property proven by Phase 12** |
+| 3 | Storage activity manufactures no Artifact, Key grant, Graph edge, projection, or outbox event | **Security property proven by Phase 12** |
+| 4 | Object keys confer no entitlement; no permanent or public URL representation exists | **Security property proven by Phase 12** |
+| 5 | Bytes already disclosed cannot be revoked (**L13**) | **Accepted limitation** |
+| 6 | An already-issued authorization remains usable until its bounded expiry (**L14**) | **Accepted limitation** |
+| 7 | The local driver validates synchronously, so a rejected call throws rather than rejecting ([0014 §3.3](./decisions/0014-phase-12-object-storage.md)) | **Accepted limitation** |
+| 8 | Object-store credential custody, provider hardening, container/bucket policy, encryption at rest, provider-side audit | **Provider/deployment responsibility** |
+| 9 | Production provider selection and the vendor adapter | **Deferred implementation requirement** (Playbook Phase 14) |
+| 10 | Production `ObjectBindingResolver`, the PostgreSQL association mechanics, and any production upload authority | **Deferred implementation requirement** — owed to a future ratified binary-bearing Artifact slice |
+| 11 | Deployment blockers introduced by Phase 12 | **NONE** |
+
+**Why items 8–10 are not blockers.** Nothing in the deployed system currently
+uses the object store: no route reaches it, no module composes it, and no
+Artifact can carry binary content. A deferred provider cannot block deployment
+of a system that stores no objects. The moment a binary-bearing Artifact slice is
+ratified, items 8–10 become live preconditions for **that** slice — and this row
+is the record that they were identified, not disposed.
+
+**Why item 7 is not a blocker.** It concerns rejection *timing* inside a
+dependency-free local driver that no production caller invokes. No ratified
+authorization, expiry, containment, or disclosure property depends on it.
+
+**What Phase 12 does not claim.** It makes no containment claim about
+**storage-driver credential compromise**, which is expressly a provider and
+deployment responsibility and is recorded as unproven in
+[threat-model.md §8 (O10)](./threat-model.md). It does not extend the **T2**
+line. It does not dispose **DB1**, **DB2**, or **DB3** — Phase 12 had no
+authority to dispose any of them, produced no evidence bearing on any of them,
+and disposed none.
 
 ---
 

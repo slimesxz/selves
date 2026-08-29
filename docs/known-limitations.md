@@ -10,6 +10,10 @@
   [phase-11-test-report.md](./phase-11-test-report.md) ·
   [deployment-blockers.md](./deployment-blockers.md) ·
   [0013](./decisions/0013-phase-11-opening.md)
+- **Phase 12 amendment:** extended by
+  [0014](./decisions/0014-phase-12-object-storage.md) with **L13** and **L14**,
+  the object-storage limitations. **L1–L12 are unchanged**, and neither new
+  entry is a deployment blocker — the blocker set remains exactly DB1–DB3.
 
 This artifact **consolidates**. It does not conceal, and it does not discharge.
 
@@ -286,6 +290,52 @@ into [deployment-blockers.md](./deployment-blockers.md) as such.
 
 ---
 
+## L13 — Bytes already disclosed cannot be revoked
+
+**Provenance:** Phase 12; recorded in
+[0014 §5](./decisions/0014-phase-12-object-storage.md).
+
+**Detail:** once bytes have been retrieved through a valid download
+authorization, they are in the holder's possession. Revoking the Artifact-read
+ground that permitted the retrieval prevents **new** download authorizations; it
+does not reach back to the bytes already delivered, and the system makes no such
+claim.
+
+**Why this is not a defect:** it is exactly the ratified semantics of
+[AGENTS.md §5](../AGENTS.md) — capabilities are revoked **prospectively**;
+disclosure cannot be erased retroactively. The same rule already governs settled
+Placements ([L11](#l11--intra-request-snapshot-window)). Executed evidence
+proves the prospective limb and the non-erasure limb together, so neither is
+implied by architecture alone.
+
+**Classification: ACCEPTED LIMITATION.**
+
+---
+
+## L14 — An already-issued download authorization remains usable until expiry
+
+**Provenance:** Phase 12; recorded in
+[0014 §5](./decisions/0014-phase-12-object-storage.md) and
+[threat-model.md §8 (O7)](./threat-model.md).
+
+**Detail:** a download authorization issued **before** revocation continues to
+redeem until its bounded expiry. The `ObjectStorage` port exposes no operation to
+revoke an issued authorization, deliberately: a presigned-URL provider could not
+honour one, so offering it would promise a guarantee the architecture does not
+deliver. **The ratified maximum lifetime of 300 seconds is therefore the whole of
+the residual-exposure control**, and it is enforced at the port rather than by
+the caller.
+
+**Why this is not a defect:** the residual window is bounded, stated, and proven
+in both directions — the authorization redeems after revocation while unexpired,
+and fails at `now === expiresAt`. A stronger property would require a storage
+mechanism that actually provides credential revocation; Phase 12 selects no
+provider and claims none.
+
+**Classification: ACCEPTED LIMITATION.**
+
+---
+
 ## Items expressly NOT disposed here
 
 Phase 10 residue is **not** Phase 11 scope and is **not** classified by this
@@ -312,6 +362,8 @@ here only so a reader does not mistake their absence for disposal.
 | L10 outbox revival scope | ACCEPTED LIMITATION |
 | L11 intra-request snapshot window | CLOSED BY CURRENT EVIDENCE (ratified property) |
 | L12 CI absent | DEFERRED PRODUCT/DEPLOYMENT WORK |
+| L13 disclosed bytes cannot be revoked | ACCEPTED LIMITATION |
+| L14 already-issued authorization usable until expiry | ACCEPTED LIMITATION |
 
 **Three deployment blockers**, mapping from the items above:
 **L5 → DB1**, **L1 + L2 → DB2** (one verification venue), **L6 → DB3**.

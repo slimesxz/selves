@@ -10,6 +10,10 @@
   unchanged.
 - **Recorded by:** Claude as engineer, under the Phase 11 Gate 1 chamber rulings
   recorded in [0013](./decisions/0013-phase-11-opening.md).
+- **Phase 12 amendment:** extended by
+  [0014](./decisions/0014-phase-12-object-storage.md) with **A.4**, the
+  derivative object-download issuance decision. **A.1–A.3 and Part B are
+  unchanged**, and no new authorization ground is introduced.
 
 ---
 
@@ -119,6 +123,41 @@ prohibition, because each is a place where a plausible implementation would leak
    identically across status, body, and headers; the internal reason never
    reaches the caller. *(RUNTIME — subject to the Q12 timing limitation and to
    open defect P11A2-F1, both recorded in the threat model.)*
+
+### A.4 Derivative decisions — object download issuance (Phase 12)
+
+**Not an HTTP route.** The sixteen routes in A.2 remain frozen; Phase 12 added
+none. This is an internal application-layer decision with **no current
+production caller**, recorded here because it is a decision that consumes an
+authorization outcome. See [0014](./decisions/0014-phase-12-object-storage.md).
+
+| Decision | Controlling authority | Actor outcomes | Ground created |
+|---|---|---|---|
+| `ObjectAccessIssuer.issueDownloadAuthorization(ctx, artifactId)` | **The existing `GET /artifacts/:id` decision** — `AuthorizationService.readArtifact`, unchanged | Exactly as the `GET /artifacts/:id` row of A.2: author and settled recipient and active Key holder pass; unsettled recipient, sibling, unrelated Self, and revoked Key holder do not | **None** |
+
+**The load-bearing points.**
+
+1. **The controlling decision is unchanged.** Issuance adds no predicate, no
+   allow ground, and no reason. It calls `readArtifact` once and can only
+   narrow that answer — never widen it. *(RUNTIME)*
+2. **PostgreSQL decides first.** The authoritative decision executes before any
+   object-association state is consulted; a denied read causes **zero** binding
+   lookups. *(RUNTIME)*
+3. **Denial is uniform.** An authorization denial and an Artifact with no bound
+   object return the identical opaque `{ ok: false }`. Neither discloses
+   Artifact existence nor object existence. *(RUNTIME)*
+4. **The capability is ephemeral and derivative.** It is not an authoritative
+   record, not a Key grant, not a Graph edge, and not refreshable once the
+   underlying authority is lost. It expires within 300 seconds, enforced at the
+   storage port. *(RUNTIME)*
+5. **Upload is not an application-level authority.** No upload issuance decision
+   exists in this matrix, because none has been ratified. Upload capability
+   exists only at the byte-plane port and confers no authority over any
+   authoritative Artifact. *(STATIC + RUNTIME)*
+6. **Identifiers are not authority.** The issuer accepts an `artifactId` and
+   never an object key; key knowledge establishes no entitlement. *(RUNTIME)*
+
+---
 
 ---
 
