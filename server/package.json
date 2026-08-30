@@ -24,9 +24,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@selves/domain": "*",
     "@fastify/cookie": "11.1.2",
     "@fastify/cors": "11.3.0",
+    "@fastify/rate-limit": "11.2.0",
+    "@selves/domain": "*",
     "fastify": "5.10.0",
     "node-pg-migrate": "^7.9.1",
     "pg": "^8.13.1"

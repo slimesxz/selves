@@ -10,6 +10,7 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import type { Writable } from 'node:stream';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import type { AppConfig } from './config.ts';
 import type { Queryable } from './db.ts';
 import type { AuthorizationService } from './authz/service.ts';
@@ -94,6 +95,41 @@ const SAFE_SERIALIZERS = {
   // the default while adding a second thing to keep correct. The shape is not
   // left to trust: observability.test.ts asserts at runtime that a res record's
   // keys are exactly ['statusCode'], so a future framework widening fails there.
+};
+
+// P13-F — bounded resource defense on the two UNAUTHENTICATED authentication
+// routes (decision 0015 Gate 1 C.7/C.8; P13-F I.2/I.6; DB1). These are the only
+// routes an unauthenticated caller can drive database work through, and they
+// are the only routes limited: /health is unthrottled so liveness checking is
+// unimpaired, and no authenticated or domain route is limited, because bounding
+// a legitimate user's own product use is the engagement-control shape T7
+// forbids.
+//
+// Explicit constants, directly tested. No adaptive scoring, no escalating
+// penalty, no reputation, no account-specific threshold. A successful request
+// does not reset the bucket.
+//
+// One uniform transport policy across both routes. Address-based enforcement
+// necessarily aggregates every caller behind one address, so the budget must
+// leave real headroom for legitimate use; a narrower login bound was withdrawn
+// for that reason, not to accommodate any particular caller's volume.
+const LOGIN_RATE_LIMIT = { max: 30, timeWindow: 60_000 };
+const LOGOUT_RATE_LIMIT = { max: 30, timeWindow: 60_000 };
+
+// The limiter throws its rejection into Fastify's error pipeline, so this code
+// is what the error handler recognizes to preserve the transport-level 429
+// rather than collapsing it into the generic client-error body.
+const RATE_LIMITED_CODE = 'FST_ERR_RATE_LIMITED';
+const RATE_LIMITED_BODY = { error: 'rate_limited' };
+
+// Informational budget headers are suppressed: telling a caller how much of its
+// allowance remains helps it pace against the bound. Retry-After is retained —
+// it is the one header that makes the refusal actionable for a legitimate
+// client without disclosing the state of the counter.
+const NO_BUDGET_HEADERS = {
+  'x-ratelimit-limit': false,
+  'x-ratelimit-remaining': false,
+  'x-ratelimit-reset': false,
 };
 
 function sessionCookieOptions(config: AppConfig) {
@@ -183,6 +219,26 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     allowedHeaders: ['content-type', 'x-acting-self'],
   });
 
+  // P13-F — registered with GLOBAL ENFORCEMENT DISABLED, so it applies only
+  // where a route opts in. State is the plugin's in-process store: memory-only,
+  // expiry-bounded, never persisted, never logged, never exported. The key is
+  // the plugin's default request address under Fastify's existing trust model —
+  // trustProxy is deliberately NOT enabled and no forwarded header is consumed,
+  // so a caller cannot mint a fresh bucket for itself. Deployment behind a
+  // proxy therefore requires a separately reviewed trusted-proxy configuration
+  // before per-client enforcement can be claimed (P13-F I.3).
+  await app.register(rateLimit, {
+    global: false,
+    addHeadersOnExceeding: NO_BUDGET_HEADERS,
+    addHeaders: { ...NO_BUDGET_HEADERS, 'retry-after': true },
+    errorResponseBuilder: () => {
+      const err = new Error('rate limited') as Error & { statusCode: number; code: string };
+      err.statusCode = 429;
+      err.code = RATE_LIMITED_CODE;
+      return err;
+    },
+  });
+
   // Origin enforcement for state-changing requests (runs after CORS/preflight).
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const m = req.method;
@@ -199,6 +255,15 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     const status = typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500
       ? err.statusCode
       : 500;
+    // P13-F: the rate limiter throws its refusal into this pipeline. It is a
+    // transport-level bound applied BEFORE any authentication work, not a
+    // domain failure, so it keeps its own status and body instead of being
+    // collapsed into the generic client-error shape. No limiter prose reaches
+    // the caller.
+    if (status === 429 && err.code === RATE_LIMITED_CODE) {
+      await reply.code(429).send(RATE_LIMITED_BODY);
+      return;
+    }
     await reply.code(status).send({ error: status === 500 ? 'internal_error' : 'bad_request' });
   });
   app.setNotFoundHandler(async (_req, reply) => {
@@ -220,7 +285,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
 
   // Login (the exempt "login surface"): verify the enrollment secret, mint a
   // session, set the cookie. The response body never carries the token.
-  app.post('/auth/session', async (req: FastifyRequest, reply: FastifyReply) => {
+  app.post('/auth/session', { config: { rateLimit: LOGIN_RATE_LIMIT } }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as { secret?: unknown } | undefined;
     const secret = body?.secret;
     if (typeof secret !== 'string' || secret.length === 0) {
@@ -237,7 +302,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
 
   // Logout: authentication-maintenance. If a cookie is present, revoke that one
   // session. Always clear the exact issued cookie variant. Always 204.
-  app.delete('/auth/session', async (req: FastifyRequest, reply: FastifyReply) => {
+  app.delete('/auth/session', { config: { rateLimit: LOGOUT_RATE_LIMIT } }, async (req: FastifyRequest, reply: FastifyReply) => {
     const token = req.cookies[config.cookieName];
     if (token) {
       await revokeSession(db, sha256(token));
