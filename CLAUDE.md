@@ -19,17 +19,18 @@ Ratified riders on the playbook:
 - firebase.json at root exists solely to keep legacy/ deployable.
 
 Playbook Phase 0 and Phase 0.5 (client compliance strip) are closed.
-Playbook Phases P1–P12 are complete and ratified (decision records
-0001–0014). Phase 12 (Object-storage boundary) closed under decision record
+Phase 12 (Object-storage boundary) closed under decision record
 0014: it establishes the vendor-neutral object-storage boundary and its
 evidence slice only. It is not production binary-media delivery — `photo`
 remains a non-creatable payload, and there is no production object binding,
 upload authority, provider adapter, HTTP route, or client surface.
 
-Playbook Phase 13 (CI, observability, and operational safety) is OPEN. Its
-Gate 1 is accepted and recorded in decision record 0015, which carries the
-governing exit condition, the observability floor ("Phase 13 may observe the
-machine. It may not observe the person."), and the segmentation. Currently
-authorized: P13-B only — governance and documentation writes. P13-C onward and
-all implementation are NOT authorized. Phases and segments are authorized one
-at a time by ruling, and work stops at each segment boundary.
+Playbook Phase 13 (CI, observability, and operational safety) is CLOSED under
+decision record 0015 §11, which carries the governing exit condition, the
+observability floor ("Phase 13 may observe the machine. It may not observe the
+person."), and the clause-by-clause satisfaction. Deployment blocker DB1 is
+discharged; DB2 and DB3 remain open, so deployment readiness is NOT established.
+
+Playbook Phases P1–P13 are therefore complete and ratified (decision records
+0001–0015). No further phase is authorized; phases and segments are authorized
+one at a time by ruling, and work stops at each segment boundary.

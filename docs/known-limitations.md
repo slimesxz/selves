@@ -14,6 +14,12 @@
   [0014](./decisions/0014-phase-12-object-storage.md) with **L13** and **L14**,
   the object-storage limitations. **L1–L12 are unchanged**, and neither new
   entry is a deployment blocker — the blocker set remains exactly DB1–DB3.
+- **Phase 13 amendment:** extended by
+  [0015 §11](./decisions/0015-phase-13-opening.md) with **Phase 13 dispositions
+  for L5 and L12 only**. Both historical entries are preserved verbatim and the
+  dispositions are appended beneath them. No other limitation receives a Phase 13
+  disposition by adjacency, and the document is not retitled. The blocker set is
+  now **DB2 and DB3**: DB1 was discharged by Phase 13.
 
 This artifact **consolidates**. It does not conceal, and it does not discharge.
 
@@ -154,6 +160,24 @@ this more acute rather than less.
 **Classification: DEPLOYMENT BLOCKER.** Inherited at that severity and
 explicitly **not** closed by Phase 11's green matrix.
 
+**Phase 13 disposition — DISCHARGED (P13-F, `f7fb467`).** Bounded authentication
+rate limiting now exists: 30 requests / 60 seconds / request address on both
+unauthenticated database-driving routes, `POST /auth/session` and
+`DELETE /auth/session`. The statement above that "no rate limiting, throttling, or
+lockout exists anywhere in the system" was true when written and is **superseded**
+as to rate limiting and throttling.
+
+**Account lockout remains deliberately absent**, and that is a ruling rather than
+an omission: persistent per-account failed-attempt state is durable
+person-associated history, which the Phase 13 observability floor excludes.
+Limiter state is ephemeral and process-local — no counter survives the process.
+
+**Residual limitation:** `trustProxy` is not enabled and no forwarded header is
+consumed, so behind a reverse proxy address keying aggregates callers into one
+bucket. Equivalent per-client enforcement there requires separately reviewed
+trusted-proxy configuration. See
+[deployment-blockers.md](./deployment-blockers.md) for the full DB1 disposition.
+
 ---
 
 ## L6 — No CSP; no broader XSS hardening
@@ -288,6 +312,19 @@ Phase 11 closure blocker — Phase 11 was never asked to build CI — but a secu
 estate that no automation enforces is a real deployment concern and is carried
 into [deployment-blockers.md](./deployment-blockers.md) as such.
 
+**Phase 13 disposition — SATISFIED (P13-C, `1d181d0`).** GitHub Actions CI now
+exists at `.github/workflows/ci.yml` and automatically exercises the ratified
+posture on every push to `master` and every pull request based on it: server and
+client typecheck, client tests, client production build, and — against a real
+PostgreSQL substrate — bootstrap, migrations-from-zero, and the full server
+suite. The provenance statement above that "no `.github/` or other CI
+configuration exists" was true when written and is **superseded**. Five
+push-triggered runs across Phase 13 were green with zero skipped steps.
+
+**Residual limitation:** CI **reports**; it does not **block**. Required
+status checks and branch protection were expressly outside Phase 13's authority,
+so nothing prevents a human from merging or pushing around a red run.
+
 ---
 
 ## L13 — Bytes already disclosed cannot be revoked
@@ -354,14 +391,14 @@ here only so a reader does not mistake their absence for disposal.
 | L2 browser navigation / reload / origin resolution | **DEPLOYMENT BLOCKER** |
 | L3 timing side channel (Q12) | ACCEPTED LIMITATION |
 | L4 T3 owner/host compromise | OUT OF THREAT-MODEL SCOPE |
-| L5 rate limiting / throttling / lockout | **DEPLOYMENT BLOCKER** |
+| L5 rate limiting / throttling / lockout | **DISCHARGED** — Phase 13 (P13-F); lockout deliberately not implemented |
 | L6 CSP / XSS hardening | **DEPLOYMENT BLOCKER** |
 | L7 not final consumer authentication | DEFERRED PRODUCT/DEPLOYMENT WORK |
 | L8 `reasons.ts` comment | ACCEPTED LIMITATION (documentation debt) |
 | L9 static-evidence bound | ACCEPTED LIMITATION |
 | L10 outbox revival scope | ACCEPTED LIMITATION |
 | L11 intra-request snapshot window | CLOSED BY CURRENT EVIDENCE (ratified property) |
-| L12 CI absent | DEFERRED PRODUCT/DEPLOYMENT WORK |
+| L12 CI absent | **SATISFIED** — Phase 13 (P13-C); CI reports, does not block |
 | L13 disclosed bytes cannot be revoked | ACCEPTED LIMITATION |
 | L14 already-issued authorization usable until expiry | ACCEPTED LIMITATION |
 

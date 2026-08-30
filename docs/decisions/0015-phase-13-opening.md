@@ -1,9 +1,9 @@
 # 0015 — Phase 13: CI, observability, and operational safety (opening authority, Gate 1 rulings, governing exit condition)
 
-- **Status:** **PHASE 13 — OPEN.** Gate 1 is accepted. **P13-B** (this record and
-  its two governance/documentation corrections) is the only authorized segment.
-  **P13-C and all implementation are NOT AUTHORIZED.**
-- **Date:** 2026-08-29
+- **Status:** **PHASE 13 — CLOSED** at §11 (P13-H), subject to that segment's own
+  transmission and hosted-CI acceptance. Segments A–H are closed. **Closure of
+  Phase 13 is not authorization to deploy** — DB2 and DB3 remain open; see §11.7.
+- **Date:** 2026-08-29 (opened) · 2026-08-30 (closed)
 - **Phase:** Playbook Phase 13 — CI, observability, and operational safety
 - **Ruled by:** Liberty (chamber); recorded by Claude as engineer
 - **Authority:** [AGENTS.md](../../AGENTS.md) is binding constitutional law.
@@ -583,13 +583,13 @@ adjustment ruled at Gate 1 disposition.
 | Segment | Content | Status |
 |---|---|---|
 | **P13-A** | Gate 1 packet | **ACCEPTED** |
-| **P13-B** | This record; `CLAUDE.md`; `server/README.md` | **AUTHORIZED** — governance/documentation writes only |
-| **P13-C** | T1 CI | **NOT AUTHORIZED** |
-| **P13-D** | T2/T3/T8 observability under the C.3 floor, and the T9 prohibition proven by test | **NOT AUTHORIZED** |
-| **P13-E** | T4 outbox visibility, under C.11 | **NOT AUTHORIZED** |
-| **P13-F** | T7 authentication rate limiting, under C.7/C.8 | **NOT AUTHORIZED** |
-| **P13-G** | T5/T6 documentation, under C.9 | **NOT AUTHORIZED** |
-| **P13-H** | Evidence run and closure against C.1 | **NOT AUTHORIZED** |
+| **P13-B** | This record; `CLAUDE.md`; `server/README.md` | **CLOSED** — `1acba05` |
+| **P13-C** | T1 CI | **CLOSED** — `1d181d0` |
+| **P13-D** | T2/T3/T8 observability under the C.3 floor, and the T9 prohibition proven by test | **CLOSED** — `8e54afd` |
+| **P13-E** | T4 outbox visibility, under C.11 | **CLOSED** — `35b2f1d` |
+| **P13-F** | T7 authentication rate limiting, under C.7/C.8 | **CLOSED** — `f7fb467` |
+| **P13-G** | T5/T6 documentation, under C.9 | **CLOSED** — `e42918b` |
+| **P13-H** | Record convergence and closure against C.1 | **CLOSED** — this section (§11) |
 
 Segment lettering is a planning skeleton, not an authorization. Each segment is
 authorized one at a time by ruling, and work stops at each segment boundary.
@@ -653,7 +653,7 @@ closing tree**. That obligation is live and undischarged.
 
 ## 8. Amendment ledger (0011 §7.1)
 
-**P13-B baseline amendments: two.**
+**P13-B baseline amendments: two.** The complete Phase 13 ledger is at §11.4.
 
 | # | Baseline file | Why the existing baseline is insufficient |
 |---|---|---|
@@ -703,6 +703,11 @@ The five objects remain exactly: Self, Signal, Artifact, Placement, Graph.
 
 ## 10. What this record does not do
 
+*This section states the position **as the P13-B opening record was filed**, and
+is preserved unaltered as history. **It is not a current-status statement.** Its
+closure and authorization sentences are superseded by **§11**, which records
+Phase 13 as closed. Read what follows as of the P13-B act only.*
+
 - It does **not** close Phase 13, and it satisfies no clause of C.1.
 - It does **not** authorize P13-C or any later segment, or any implementation.
 - It does **not** install, propose installing, or select a version of any
@@ -721,3 +726,271 @@ The five objects remain exactly: Self, Signal, Artifact, Placement, Graph.
 > only. P13-C onward — NOT AUTHORIZED.**
 > **DB1 — open, Phase 13 is its authorized disposition venue. DB2 / DB3 —
 > unchanged and open.**
+
+---
+
+## 11. PHASE 13 CLOSURE (P13-H)
+
+*The closure record. It rests on the transmitted estate and on five
+push-triggered hosted CI runs. No evidence was reopened, and no implementation
+was touched to produce it: P13-H is a record-convergence segment, amending four
+documents and no source, test, manifest, or workflow.*
+
+### 11.1 The accepted commit sequence
+
+Every segment was committed, transmitted as an ordinary single-commit
+fast-forward, network-verified with `git ls-remote`, and independently proven by
+a push-triggered hosted CI run.
+
+| Commit | Segment | Hosted run | Conclusion |
+|---|---|---|---|
+| `1acba05` | P13-B — open Phase 13 and record its Gate 1 charter | — (governance only, preceded CI) | — |
+| `1d181d0` | P13-C — add continuous integration | `33262606906` | success |
+| `8e54afd` | P13-D — harden operational logging privacy | `33267108812` | success |
+| `35b2f1d` | P13-E — add privileged outbox visibility | `33323350752` | success |
+| `f7fb467` | P13-F — bound authentication resource consumption | `33325442822` | success |
+| `e42918b` | P13-G — document and prove database recovery | `33326832396` | success |
+
+**Closing implementation tree:** `e42918bd7d4c7d7c15926341c54fe92dd2672731`.
+
+**Estate at that tree**, from hosted run `33326832396`:
+
+```text
+server   66 files / 561 tests passed
+client   28 files / 181 tests passed
+typecheck (server, client) and client production build green
+0 non-success steps · 0 skipped steps
+```
+
+Five runs, five green, zero skipped steps in any of them.
+
+### 11.2 T1–T9 disposition
+
+| T | Obligation | Segment | Evidence |
+|---|---|---|---|
+| **T1** | CI: typecheck, lint, unit, integration, migrations-from-zero, production build | P13-C | `.github/workflows/ci.yml`; five hosted runs from a clean checkout |
+| **T2** | Structured server and worker logs | P13-D | allowlist serializers; worker `errorClass`; `observability.test.ts` 12/12 |
+| **T3** | Request correlation IDs | P13-D | Fastify `req.id`; `requestIdHeader` defaults false, so a caller cannot set it; no response header; no persistence |
+| **T4** | Outbox backlog and failure visibility | P13-E | `operator outbox-depth` through `selves_worker`; `p9-worker-role.test.ts` 16/16 |
+| **T5** | Backup and restore documentation | P13-G | [backup-and-recovery.md](../backup-and-recovery.md); recovery proof 6/6 |
+| **T6** | Migration rollback / forward-repair strategy | P13-G | forward-repair doctrine; failed-migration atomicity proven |
+| **T7** | Rate limits protecting resources/security only | P13-F | 30/60s per address on the two unauthenticated routes; `rate-limit.test.ts` 13/13 |
+| **T8** | Privacy-conscious error reporting | P13-D | `{type, code}` allowlist; generic external envelope |
+| **T9** | *(prohibition)* no Artifact contents or recipient lists logged | P13-D, held through P13-G | field-agnostic sweeps proving absence |
+
+**The observability floor held under every later segment.** The concrete
+regression that opened P13-D — identifier-bearing `req.url` records — went
+**182 → 0** at P13-D and remained 0 in the P13-E, P13-F and P13-G hosted runs.
+The production emission surface is closed and unchanged since P13-D: neither
+P13-E nor P13-F added a single logging call.
+
+### 11.3 C.1 exit condition — clause-by-clause adjudication
+
+| # | Clause | Verdict |
+|---|---|---|
+| 1 | CI proves typecheck/lint, unit/integration, migration-from-zero, production build from a clean checkout | **SATISFIED** |
+| 2 | CI failure is fail-closed; a required check cannot silently skip | **SATISFIED** |
+| 3 | Server and worker logging structured and satisfying C.3 | **SATISFIED** |
+| 4 | Correlation only within the C.10 request-local boundary | **SATISFIED** |
+| 5 | Outbox backlog/failure has an authorized operational visibility path | **SATISFIED** |
+| 6 | Authentication rate limiting implemented and adversarially proven | **SATISFIED** |
+| 7 | Backup/restore and rollback/forward-repair documented at the C.9 level | **SATISFIED** |
+| 8 | Privacy-conscious error handling proven, including T9 | **SATISFIED** |
+| 9 | All inherited static locks and security tests remain unweakened | **SATISFIED** — see §11.5 |
+| 10 | The complete regression estate passes at the recorded closing tree | **SATISFIED** — 66/561 and 28/181 at `e42918b` |
+| 11 | Any baseline amendment is enumerated in the amendment ledger | **SATISFIED** by §11.4 |
+| 12 | DB1 disposed only per C.8; DB2 and DB3 do not move by adjacency | **SATISFIED** by §11.7 |
+| 13 | No Phase 13 work modifies or operationally acts upon `main`/`origin/main` | **SATISFIED** — see §11.9 |
+| 14 | The record records evidence, dispositions, residual limitations, and exact satisfaction | **SATISFIED** by this section |
+
+> **PHASE 13 EXIT CONDITION — SATISFIED. 14 / 14 CLAUSES.**
+
+Clauses 11, 12 and 14 were the three the transmitted estate could not discharge
+on its own: they are recording obligations, and this section is the record that
+discharges them. They required no new operational capability, and none was added.
+
+### 11.4 The complete Phase 13 baseline-amendment ledger
+
+Under [0011 §7.1](./0011-phase-9-outbox-projections.md) the ledger is chamber
+record, and a change to a baseline file enters it however it is characterized.
+
+| # | Baseline file | Segment | Nature |
+|---|---|---|---|
+| 1 | `CLAUDE.md` | P13-B | governance status correction |
+| 2 | `server/README.md` | P13-B | false runtime/workspace development instructions |
+| 3 | `server/src/app.ts` | P13-D, P13-F | log serializers; rate-limiter registration and 429 handling |
+| 4 | `server/src/worker/main.ts` | P13-D | allowlisted error classification |
+| 5 | `server/src/operator/cli.ts` | P13-E | `outbox-depth` command |
+| 6 | `server/src/operator/commands.ts` | P13-E | `outboxDepth` and its fixed diagnostic statement |
+| 7 | `server/test/p9-worker-role.test.ts` | P13-E | **strengthening** |
+| 8 | `server/test/authz-import-graph.test.ts` | P13-E | **C2 containment-lock widening** |
+| 9 | `server/package.json` | P13-F | `@fastify/rate-limit` 11.2.0, exact |
+| 10 | `package-lock.json` | P13-F | +3 entries, 0 removed, 0 version-changed |
+
+**The ledger is closed at ten.**
+
+Phase-13-native **additions** — not baseline amendments — are:
+`.github/workflows/ci.yml`, `server/test/observability.test.ts`,
+`server/test/rate-limit.test.ts`, `server/test/backup-and-recovery.test.ts`,
+[docs/backup-and-recovery.md](../backup-and-recovery.md), and this record.
+Later modification of a Phase-13-native document creates no eleventh entry.
+
+Exactly one direct dependency entered the estate in the whole phase.
+
+### 11.5 Security-lock amendment — stated plainly, not euphemized
+
+Two inherited test files were amended, and they are **not** the same kind of act.
+
+**`p9-worker-role.test.ts` — a strengthening.** It added assertions making an
+existing negative property executable: that `selves_operator`, `selves_app`,
+`selves_bootstrap` and unassumed `selves_migrate` are all denied
+`proj.outbox_depth()`. No prior assertion was altered or removed.
+
+**`authz-import-graph.test.ts` — a security-lock widening.** The C2
+projection-reference lock ([0011 C2](./0011-phase-9-outbox-projections.md))
+previously required that **only** the worker tree reference the `proj` schema.
+P13-E's operator diagnostic necessarily names `proj.outbox_depth()` in the
+operator tree, so the lock now permits exactly two named modules:
+
+```text
+operator/cli.ts
+operator/commands.ts
+```
+
+This is a widening of a security lock and is recorded as one. It is **not** a
+weakening, and the structure of the amended test is the proof: the scan is
+unchanged, the allowlist is pinned by its own assertion, and
+`expect(offenders.sort()).toEqual([...])` still fails on **any** third
+non-worker production `proj.` reference. C2 itself prescribed this outcome —
+*"if one is ever placed outside it, this test fails and the lock must name that
+module explicitly."* Phase 9 built the mechanism; Phase 13 exercised it.
+
+**No database privilege accompanied it:** no grant, schema USAGE, EXECUTE, table
+privilege, role membership, or migration. The privilege boundary is byte-identical
+to Phase 9.
+
+### 11.6 DB1 — discharged
+
+> **DB1 — DISCHARGED by bounded authentication-surface rate limiting.**
+> Unauthenticated database-driving session issuance and revocation are bounded to
+> 30 requests per 60 seconds per request address. Limiter state is ephemeral and
+> process-local; no persistent failed-attempt counter, account lockout, or
+> person-level behavioral history is introduced. Authentication credentials
+> remain 256-bit random material. Account lockout is deliberately not implemented
+> because bounded rate limiting satisfies the deployment blocker without creating
+> durable person-associated attempt history. Equivalent per-client enforcement
+> behind a reverse proxy remains conditional on separately reviewed trusted-proxy
+> configuration.
+
+Discharged at `f7fb4679a52b7d394b043adaacd9835b11500173`, hosted run
+`33325442822`.
+
+**The closure is deliberately narrower than the original blocker language.**
+DB1's risk paragraph assumed a guessable authentication factor. The implemented
+credential is 256-bit random material, against which online guessing was never a
+credible path. What P13-F adds is a **second, independent operational bound on
+unauthenticated resource consumption**, where previously there was none. The
+original DB1 text is preserved in
+[deployment-blockers.md](../deployment-blockers.md) rather than rewritten, so the
+record does not make the earlier analysis appear more precise than it was.
+
+### 11.7 DB2 and DB3 — unchanged, and unmoved by adjacency
+
+**DB2** (no real-browser cookie / `__Host-` / CORS verification) and **DB3** (no
+CSP or broader XSS hardening) are **exactly as inherited**. Neither moved, and
+the mechanical proof is that **Phase 13 touched zero client files**:
+
+```text
+git diff --name-only 9128834..HEAD | grep '^client/'   →  0
+client/browser/ last modified at P10-BR4
+grep for Content-Security-Policy | helmet | X-Frame-Options | X-Content-Type
+  across server/src and client/src  →  no match
+```
+
+The real-browser venue was expressly excluded from CI at Gate 1 C.3, precisely so
+that running it could not be mistaken for discharging DB2.
+
+> **Closing Phase 13 is not authorization to deploy.** Deployment readiness
+> remains **NOT ESTABLISHED** while DB2 and DB3 stand. They are deployment
+> blockers, not Phase 13 closure blockers — which is why Phase 13 may close while
+> deployment may not proceed.
+
+### 11.8 Residual limitations, carried openly
+
+1. **Trusted-proxy limitation.** `trustProxy` is deliberately not enabled and no
+   forwarded header is consumed. Behind a reverse proxy, address keying
+   aggregates every caller into one bucket. Equivalent per-client enforcement
+   requires a separately reviewed trusted-proxy configuration.
+2. **Recovery non-claims.** No RPO, RTO, backup schedule, retention policy,
+   offsite copy, or managed provider. [0004](./0004-auth-active-self.md)'s
+   condition remains the trigger: before any environment holds non-disposable
+   data, an upgrade-path acceptance criterion must be added to the then-current
+   phase.
+3. **The migration-transaction guarantee is estate-specific.** It holds because
+   no committed migration opts out of the wrapping transaction. Any future
+   non-transactional migration requires an explicit recovery review before
+   acceptance.
+4. **CI reports; it does not block.** Required-status-check and branch-protection
+   configuration is outside C.5 and was never authorized. C.1 clause 2 means that
+   within a run, unavailable infrastructure fails the workflow rather than
+   silently skipping a proof; it does not mean CI prevents a human from merging
+   around it.
+5. **Timing-side-channel indistinguishability** remains unestablished, as
+   [0013 Q12](./0013-phase-11-opening.md) recorded.
+
+### 11.9 P10-N4 — preserved
+
+No Phase 13 act touched the Pages deployment branch. There is no local `main`;
+every transmission was `git push origin master:master`, an ordinary
+single-commit fast-forward with no force and no tags; the CI workflow names the
+branch **zero** times and contains no deploy job, no `git` or `gh` write, and
+`permissions: contents: read`. No repository administration was performed at any
+point.
+
+### 11.10 Playbook §6 documentation inventory
+
+Required by C.13 to be inventoried and reported at closure. These are recorded as
+**not produced by Phase 13** — they are not Phase 13 deliverables and their
+absence is not a defect in the Phase 13 exit condition.
+
+**Present:** authorization matrix · threat model · known limitations · deployment
+blockers · decision records · backup and recovery ·
+`server/README.md` development instructions.
+
+**Outstanding:** architecture overview · schema diagram · state-machine
+documentation · projection/rebuild documentation · deployment runbook (Playbook
+Phase 14) · standalone open-questions register (AGENTS.md §11 serves the
+function) · constitutional-compliance checklist · root `README.md`.
+
+### 11.11 Protected residue
+
+The pre-existing untracked `client/test-results/` residue remains **untracked and
+untouched** throughout Phase 13. It was never staged, deleted, modified,
+gitignored, normalized, or absorbed into any commit.
+
+### 11.12 Closure
+
+> **PHASE 13 — CLOSED.**
+>
+> **PHASE 13 EXIT CONDITION — SATISFIED. 14 / 14 CLAUSES.**
+> **T1–T9 — DISCHARGED.**
+> **DB1 — DISCHARGED.**
+> **PHASE 13 CLOSURE BLOCKERS — NONE.**
+
+Final network acceptance requires the push-triggered hosted CI run on the P13-H
+closure commit itself to be green; chamber acceptance of that run completes this
+record externally.
+
+### 11.13 What this closure does not do
+
+It does **not** authorize deployment. It does **not** dispose DB2 or DB3. It does
+**not** authorize Playbook Phase 14 or any later phase. It does **not** reopen
+Phase 10, 11, or 12, close any Phase 10 mounted binding, or dispose any Class B
+proposition. It does **not** produce the outstanding Playbook §6 documents. It
+does **not** repair `server/README.md`'s residual schema- and phase-state
+staleness recorded at §6, the absent root `README.md`, or the root `.gitignore`.
+It performs no operation on `main` or `origin/main`, and **P10-N4 is preserved
+permanently.**
+
+> **PHASE 13 — CLOSED. P13-A through P13-H — COMPLETE.**
+> **EXIT CONDITION — SATISFIED. DEPLOYMENT READINESS — NOT ESTABLISHED.**

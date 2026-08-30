@@ -13,6 +13,13 @@
   deployment-boundary analysis below. **DB1–DB3 are textually unchanged and
   remain unresolved**, and **Phase 12 adds no blocker** — the summary at the
   end of this document is unchanged.
+- **Phase 13 amendment:** extended by
+  [0015 §11.6](./decisions/0015-phase-13-opening.md) with the **DB1 disposition**
+  below. **DB1 is DISCHARGED** at `f7fb467`. **DB2 and DB3 are textually
+  unchanged and remain unresolved**, and Phase 13 adds no blocker. DB1's original
+  provenance, risk statement, and required disposition are **preserved verbatim**
+  — the disposition is appended beside them, not substituted for them, so the
+  record does not make the earlier analysis appear more precise than it was.
 
 This is **not** a production-readiness checklist. It answers exactly one
 question:
@@ -78,6 +85,37 @@ itself remains a P11-F act and is not claimed here.
 | **Concrete risk** | The enrollment credential is the sole authentication factor. Nothing limits guess attempts, so an attacker may attempt them continuously against a permanently valid credential. `contain_account` exists to *respond* to a compromise; nothing *prevents* the attempt. There is no lockout, no backoff, and no signal that would even surface the attempt. |
 | **Why Phase 11 evidence does not discharge it** | Every Phase 11 proof is about a single request's correctness. `auth-api` proves a wrong secret yields a generic 401 with no oracle — which is exactly right, and exactly irrelevant to how many times that 401 may be provoked. Correct rejection at unbounded rate is still an unbounded attack. |
 | **Required disposition before deployment** | Implement rate limiting / throttling / lockout on the authentication surface (Playbook Phase 13 places rate limits there), then prove it. Alternatively, an explicit chamber ruling accepting the risk for a bounded invite-only alpha with compensating controls. |
+
+#### DB1 — Phase 13 disposition (P13-F, `f7fb467`)
+
+> **DISCHARGED by bounded authentication-surface rate limiting.**
+
+The original analysis above is preserved unchanged. This disposition records what
+was actually built, and is deliberately narrower than the original blocker
+language.
+
+| | |
+|---|---|
+| **Discharged at** | `f7fb4679a52b7d394b043adaacd9835b11500173`, hosted CI run `33325442822` |
+| **Control** | 30 requests / 60 seconds / request address on **both** unauthenticated database-driving routes — `POST /auth/session` and `DELETE /auth/session` |
+| **State** | ephemeral and process-local; no persistent failed-attempt counter, no account lockout, no person-level behavioral history |
+| **Lockout** | **deliberately not implemented.** Persistent per-account failure state is durable person-associated history, which the Phase 13 observability floor excludes. Bounded rate limiting satisfies the blocker without it. |
+| **Not limited** | `/health` and every authenticated route — bounding a legitimate user's own product use would be the engagement-control shape the Playbook's T7 forbids |
+| **Evidence** | `server/test/rate-limit.test.ts` 13/13, including: the 31st valid login refused **before** `auth.issue_session` executes, no session row and no cookie created on refusal, independent per-address buckets, independent login/logout budgets, and forged `X-Forwarded-For` minting no fresh key |
+
+**What this does not claim.** The original risk paragraph assumed a guessable
+authentication factor. The implemented credential is **256-bit random material**,
+against which online guessing was never a credible path. P13-F does not make a
+guessable credential safe; it adds a **second, independent operational bound on
+unauthenticated resource consumption**, where previously there was none.
+
+**Carried limitation — trusted proxy.** `trustProxy` is deliberately not enabled
+and no forwarded header is consumed. Behind a reverse proxy, address keying
+aggregates every caller into one bucket. **Equivalent per-client enforcement
+behind a proxy remains conditional on separately reviewed trusted-proxy
+configuration.**
+
+---
 
 ### DB2 — No real-browser verification of cookie policy, `__Host-`, and CORS
 
@@ -150,7 +188,7 @@ set, and Phase 11 asserts no finding about them.**
 | **L9** static-evidence bound | A recorded property of the evidence, complemented by DATABASE evidence at the same boundary. |
 | **L10** outbox revival scope | Correctly scoped, correctly recorded, no operational consequence. |
 | **L11** intra-request snapshot window | The ratified prospective-revocation semantics of AGENTS.md §5, now proven in both orderings by C2. |
-| **L12** CI absent | Deferred to Phase 13 and not a property of the running system. It is, however, the reason DB1–DB3 must be re-verified rather than assumed at deployment time: nothing automatically re-runs this estate. |
+| **L12** CI absent | *(Phase 11 assessment, superseded.)* Deferred to Phase 13 and not a property of the running system. It is, however, the reason DB1–DB3 must be re-verified rather than assumed at deployment time: nothing automatically re-runs this estate. **Phase 13 disposition: CI now exists** (`1d181d0`) and automatically exercises typecheck, lint, unit and integration tests, migrations-from-zero and the production build on every push to `master`, so the estate is re-run automatically rather than assumed. Branch protection remains outside the claim — CI reports, it does not block a merge. |
 
 ---
 
@@ -207,14 +245,22 @@ and disposed none.
 | ID | Blocker | Category |
 |---|---|---|
 | — | *(none)* | **PHASE 11 CLOSURE BLOCKER** |
-| **DB1** | No rate limiting / throttling / lockout | DEPLOYMENT BLOCKER |
+| **DB1** | No rate limiting / throttling / lockout | **DISCHARGED** — Phase 13 (P13-F, `f7fb467`) |
 | **DB2** | No real-browser cookie / `__Host-` / CORS verification | DEPLOYMENT BLOCKER |
 | **DB3** | No CSP / XSS hardening | DEPLOYMENT BLOCKER |
 
 > **Phase 11 closure blockers: NONE.**
-> **Deployment blockers: THREE. The integrated system must not be deployed to
-> production until DB1–DB3 are disposed.**
+> **Deployment blockers: TWO. DB1 is discharged; the integrated system must not
+> be deployed to production until DB2 and DB3 are disposed.**
 
+**DB2 and DB3 did not move.** Phase 13 touched **zero** client files, the
+real-browser venue was expressly excluded from its CI, and no
+Content-Security-Policy or companion header exists anywhere in the source. Their
+status is exactly as Phase 11 left it. **Deployment readiness remains NOT
+ESTABLISHED.**
+
+*(Phase 11 statement, preserved as history and true as of that closure; DB1 was
+subsequently discharged in Phase 13 — see the summary above.)*
 **All three are inherited from [0004](./decisions/0004-auth-active-self.md) at
 their original severity** — they are exactly that record's deployment-blocking
 list. **None is closed by Phase 11's green matrix**, and none was repaired in
