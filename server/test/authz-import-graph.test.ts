@@ -272,13 +272,34 @@ describe('P5-A mechanical bypass containment (TypeScript AST import graph)', () 
     // every projection module lives under src/worker/; if one is ever placed
     // outside it, this test fails and the lock must name that module
     // explicitly.
+    //
+    // P13-E C2 containment-lock widening (decision 0015 Gate 1 C.11; P13-E I.1,
+    // and the fourth-path authorization). The chamber ratified an explicit
+    // operator diagnostic that reads AGGREGATE outbox condition by calling
+    // proj.outbox_depth() as selves_worker. Those two modules are therefore the
+    // first legitimate projection reference outside src/worker/, and C2's own
+    // prescription is that the lock must NAME them rather than be relaxed.
+    //
+    // This is an exception for two ratified diagnostic modules, NOT a general
+    // operator entitlement to projection surfaces: no path prefix, no wildcard,
+    // no count-only check. The scan below is unchanged, and every other
+    // production module referencing `proj.` outside the worker tree still
+    // fails. The DATABASE boundary is untouched — no grant, schema USAGE,
+    // EXECUTE, table privilege, role membership, or migration accompanies it.
+    const PROJ_REFERENCE_ALLOW = new Set(['operator/cli.ts', 'operator/commands.ts']);
+    // The allowlist itself is pinned, so it cannot grow silently.
+    expect([...PROJ_REFERENCE_ALLOW].sort()).toEqual(['operator/cli.ts', 'operator/commands.ts']);
+
     const offenders: string[] = [];
     for (const file of files) {
       if (file.startsWith(`${WORKER_DIR}/`)) continue;
       const text = readFileSync(file, 'utf8');
       if (/\bproj\./.test(text)) offenders.push(relative(SRC, file));
     }
-    expect(offenders).toEqual([]);
+    // Both sides of the property are proven: the ratified modules are exactly
+    // the observed references, and nothing else outside the worker tree is.
+    expect(offenders.sort()).toEqual(['operator/cli.ts', 'operator/commands.ts']);
+    expect(offenders.filter((file) => !PROJ_REFERENCE_ALLOW.has(file))).toEqual([]);
   });
 
   it('P9 (0011 Q10): the worker tree reads WORKER_DATABASE_URL and no other credential', () => {

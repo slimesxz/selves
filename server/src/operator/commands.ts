@@ -119,6 +119,64 @@ export async function recoverEnrollment(db: Queryable, opts: { account: string }
   }
 }
 
+// ── outbox-depth (P13-E, T4 operational visibility) ──────────────────────────
+//
+// Aggregate outbox condition, and nothing else. The authority boundary is
+// proj.outbox_depth() — an owner-owned SECURITY DEFINER function returning
+// three scalars (0011 containment ruling). The invoking principal is
+// selves_worker, which already holds EXECUTE on it and which holds NO table
+// privilege in any schema, no domain/auth EXECUTE, no acting-Self context and
+// no membership: it is structurally incapable of reading an individual outbox
+// row, a payload, a placement, a recipient, or an artifact.
+//
+// The statement below is FIXED. This module exposes no facility for supplying
+// SQL, a function name, or a table name, so the caller cannot reach the other
+// function the worker credential can execute (proj.process_outbox, which
+// mutates). Authority is constrained by code even though the credential carries
+// pre-existing worker authority.
+//
+// Age is derived numerically IN SQL rather than by parsing an interval's text
+// form, so the result never depends on locale or on interval rendering. The
+// database function is unchanged: no migration is warranted by a presentation
+// concern.
+const OUTBOX_DEPTH_SQL =
+  'SELECT unclaimed, dead, ' +
+  'CASE WHEN oldest_unclaimed_age IS NULL THEN NULL ' +
+  'ELSE floor(extract(epoch FROM oldest_unclaimed_age))::bigint END AS oldest_seconds ' +
+  'FROM proj.outbox_depth()';
+
+export type OutboxDepthResult =
+  | { status: 'observed'; unclaimed: number; dead: number; oldestUnclaimedAgeSeconds: number | null }
+  // An observation that did not happen. NEVER rendered as zero backlog.
+  | { status: 'error'; type: string; sqlstate?: string };
+
+export async function outboxDepth(db: Queryable): Promise<OutboxDepthResult> {
+  try {
+    const { rows } = await db.query<{
+      unclaimed: string | number;
+      dead: string | number;
+      oldest_seconds: string | number | null;
+    }>(OUTBOX_DEPTH_SQL);
+    const r = rows[0];
+    if (!r) return { status: 'error', type: 'MalformedResult' };
+    const unclaimed = Number(r.unclaimed);
+    const dead = Number(r.dead);
+    const oldest = r.oldest_seconds === null ? null : Number(r.oldest_seconds);
+    // A shape we cannot trust is a failed observation, not a zero one.
+    if (!Number.isFinite(unclaimed) || !Number.isFinite(dead) || (oldest !== null && !Number.isFinite(oldest))) {
+      return { status: 'error', type: 'MalformedResult' };
+    }
+    return { status: 'observed', unclaimed, dead, oldestUnclaimedAgeSeconds: oldest };
+  } catch (err) {
+    // P13-D classification, not exception prose: a database error message can
+    // carry row values, DEFINER context, or internal SQL.
+    const e = err as { constructor?: { name?: string }; name?: string };
+    const type = e?.constructor?.name ?? e?.name ?? 'Error';
+    const s = sqlstate(err);
+    return s ? { status: 'error', type, sqlstate: s } : { status: 'error', type };
+  }
+}
+
 // ── contain (compromise containment) ─────────────────────────────────────────
 export type ContainResult =
   | { status: 'contained'; credentialsDisabled: number; sessionsRevoked: number; alreadyContained: boolean }

@@ -163,3 +163,179 @@ describe('P9 worker db module — WORKER_DATABASE_URL only', () => {
     }
   });
 });
+
+// ── P13-E — T4 operational visibility (decision 0015 Gate 1 C.11; P13-E I.1–I.6)
+//
+// The `outbox-depth` operator command reads aggregate outbox condition through
+// proj.outbox_depth() as selves_worker — the ONLY login principal granted that
+// EXECUTE, and one holding no table privilege anywhere. P13-E adds no grant, no
+// migration and no database object; it consumes authority Phase 9 already
+// ratified.
+//
+// The denial cases below make an EXISTING negative property executable, because
+// the command's security argument now depends on it. Nothing is weakened: these
+// are additions to the exhaustive role/ACL proof, and every prior assertion in
+// this file is unchanged.
+describe('P13-E outbox-depth — privilege proof (C.11)', () => {
+  it('every non-worker login role is denied proj.outbox_depth(), including unassumed selves_migrate', async () => {
+    // selves_migrate WITHOUT its role=selves_owner option: the bare principal
+    // holds nothing. The committed TEST_MIGRATE_DATABASE_URL carries the option,
+    // so it is stripped here to probe the unassumed role itself.
+    const bare = (process.env.TEST_MIGRATE_DATABASE_URL ?? '').split('?')[0]!;
+    const mig = new (await import('pg')).default.Pool({ connectionString: bare });
+    try {
+      const cases: Array<[string, pg.Pool]> = [
+        ['selves_app', app],
+        ['selves_operator', op],
+        ['selves_bootstrap', boot],
+        ['selves_migrate (unassumed)', mig],
+      ];
+      for (const [name, pool] of cases) {
+        expect(await sqlstate(pool, 'SELECT * FROM proj.outbox_depth()'), `${name} outbox_depth`).toBe('42501');
+        expect(await sqlstate(pool, 'SELECT * FROM proj.process_outbox($1)', [1]), `${name} process_outbox`).toBe('42501');
+      }
+    } finally {
+      await mig.end();
+    }
+  });
+
+  it('catalog: EXECUTE on proj.outbox_depth() is held by exactly one login role', async () => {
+    const { rows } = await su.query<{ rolname: string }>(
+      `SELECT r.rolname FROM pg_roles r
+        WHERE r.rolcanlogin
+          AND has_function_privilege(r.rolname, 'proj.outbox_depth()', 'EXECUTE')
+          AND has_schema_privilege(r.rolname, 'proj', 'USAGE')
+          AND NOT r.rolsuper
+        ORDER BY r.rolname`,
+    );
+    expect(rows.map((r) => r.rolname)).toEqual(['selves_worker']);
+  });
+});
+
+describe('P13-E outbox-depth — observation contract (I.4, output contract)', () => {
+  const CLI = ['src/operator/cli.ts', 'outbox-depth'];
+
+  async function runCli(workerUrl: string | undefined): Promise<{ code: number; stdout: string; stderr: string }> {
+    const { spawn } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    const env = { ...process.env, ...(workerUrl === undefined ? {} : { WORKER_DATABASE_URL: workerUrl }) };
+    return await new Promise((done) => {
+      const child = spawn(process.execPath, CLI, { cwd: serverRoot, env, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (c: Buffer) => { stdout += c.toString(); });
+      child.stderr.on('data', (c: Buffer) => { stderr += c.toString(); });
+      child.on('exit', (code) => done({ code: code ?? -1, stdout, stderr }));
+    });
+  }
+
+  const WORKER_URL = process.env.TEST_WORKER_DATABASE_URL;
+
+  it('empty backlog is exactly 0 / 0 / null, and the object carries exactly three fields', async () => {
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+    const r = await runCli(WORKER_URL);
+    expect(r.code, r.stderr).toBe(0);
+    const parsed = JSON.parse(r.stdout.trim()) as Record<string, unknown>;
+    expect(Object.keys(parsed).sort()).toEqual(['dead', 'oldestUnclaimedAgeSeconds', 'unclaimed']);
+    expect(parsed).toEqual({ unclaimed: 0, dead: 0, oldestUnclaimedAgeSeconds: null });
+  });
+
+  it('seeded unclaimed backlog is represented, with a deterministic numeric age', async () => {
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+    // occurred_at is set explicitly so the derived age is deterministic rather
+    // than a race against wall-clock.
+    await su.query(
+      `INSERT INTO public.outbox_events (event_type, payload, occurred_at)
+       VALUES ('placement_settled', '{}'::jsonb, pg_catalog.now() - interval '90 seconds')`,
+    );
+    const r = await runCli(WORKER_URL);
+    expect(r.code, r.stderr).toBe(0);
+    const parsed = JSON.parse(r.stdout.trim()) as { unclaimed: number; dead: number; oldestUnclaimedAgeSeconds: number };
+    expect(parsed.unclaimed).toBe(1);
+    expect(parsed.dead).toBe(0);
+    // Integer seconds, not an interval string, and floored from the real age.
+    expect(Number.isInteger(parsed.oldestUnclaimedAgeSeconds)).toBe(true);
+    expect(parsed.oldestUnclaimedAgeSeconds).toBeGreaterThanOrEqual(90);
+    expect(parsed.oldestUnclaimedAgeSeconds).toBeLessThan(600);
+  });
+
+  it('dead-lettered rows count as dead and are excluded from unclaimed', async () => {
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+    await su.query(
+      `INSERT INTO public.outbox_events (event_type, payload, attempts, failed_at, last_error)
+       VALUES ('placement_settled', '{}'::jsonb, 5, pg_catalog.now(), 'seeded')`,
+    );
+    const r = await runCli(WORKER_URL);
+    expect(r.code, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout.trim())).toEqual({ unclaimed: 0, dead: 1, oldestUnclaimedAgeSeconds: null });
+  });
+
+  it('a failed observation exits non-zero, emits no JSON, and is distinguishable from an empty backlog', async () => {
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+    const bad = (process.env.TEST_WORKER_DATABASE_URL ?? '').replace(/\/[^/?]+(\?|$)/, '/p13e_absent_database$1');
+    const r = await runCli(bad);
+    expect(r.code).not.toBe(0);
+    // The critical property: a failure is NEVER rendered as zero backlog.
+    expect(r.stdout.trim()).toBe('');
+    expect(r.stdout).not.toContain('unclaimed');
+    // Classification, not prose (P13-D): no database message, no sentinel db name.
+    expect(r.stderr).toContain('outbox-depth observation failed');
+    expect(r.stderr).not.toContain('p13e_absent_database');
+    expect(r.stderr).not.toContain('does not exist');
+  });
+
+  it('the command takes no arguments, so no query, function, or table name can be selected through input', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const cli = readFileSync(resolve(here, '../src/operator/cli.ts'), 'utf8');
+    const commands = readFileSync(resolve(here, '../src/operator/commands.ts'), 'utf8');
+
+    // The handler parses no options at all.
+    const start = cli.indexOf('async function cmdOutboxDepth');
+    expect(start).toBeGreaterThan(-1);
+    const body = cli.slice(start, cli.indexOf('\n}', start));
+    expect(body).not.toContain('parseArgs');
+    expect(body).toContain("if (argv.length > 0) fail('usage: outbox-depth')");
+    expect(body).toContain("pool('WORKER_DATABASE_URL')");
+    // No role transition anywhere in the operator surface.
+    for (const src of [cli, commands]) {
+      expect(/SET\s+ROLE/i.test(src)).toBe(false);
+    }
+    // The diagnostic statement is a fixed literal naming exactly one function.
+    expect(commands).toContain('FROM proj.outbox_depth()');
+    // The ratified invariant is that no CALLABLE path to the mutating
+    // projection function exists here — not that the identifier may never be
+    // written. The module's comments name proj.process_outbox precisely in
+    // order to explain why it is excluded, so the assertion tests the
+    // executable form: a SQL reference that would actually invoke it.
+    for (const callable of ['FROM proj.process_outbox', 'SELECT proj.process_outbox', 'CALL proj.process_outbox']) {
+      expect(commands.includes(callable), `commands.ts contains a callable reference: ${callable}`).toBe(false);
+    }
+    // Belt and braces: exactly one SQL statement literal exists in the module's
+    // outbox surface, and it is the one asserted above.
+    expect(commands.split('FROM proj.').length - 1).toBe(1);
+
+    // Any argument is refused before a connection is opened.
+    const r = await runCli(WORKER_URL);
+    expect(r.code).toBe(0);
+  });
+
+  it('successful output carries no governed identifier, payload, or prose', async () => {
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+    await su.query(
+      `INSERT INTO public.outbox_events (event_type, payload)
+       VALUES ('placement_settled', '{"placement_id":"11111111-2222-3333-4444-555555555555"}'::jsonb)`,
+    );
+    const r = await runCli(WORKER_URL);
+    expect(r.code, r.stderr).toBe(0);
+    expect(r.stdout).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    for (const forbidden of ['placement_id', 'payload', 'event_type', 'last_error', 'occurred_at', 'id']) {
+      expect(r.stdout.includes(forbidden), `output leaked ${forbidden}`).toBe(false);
+    }
+    await su.query('TRUNCATE public.outbox_events RESTART IDENTITY CASCADE');
+  });
+});

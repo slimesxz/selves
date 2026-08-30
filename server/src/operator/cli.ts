@@ -3,6 +3,7 @@
 //   rotate  --account <uuid> --expected-active <credential-id>  (selves_bootstrap; interactive)
 //   recover --account <uuid>                      (selves_bootstrap; interactive)
 //   contain --account <uuid>                       (selves_operator)
+//   outbox-depth                                   (selves_worker; read-only)
 //
 // enroll/rotate/recover display a one-time secret, so they run INTERACTIVELY
 // ONLY and fail closed otherwise (no DB call, nothing persisted). The operator
@@ -10,7 +11,8 @@
 // ambiguous or display-failed enrollment can be recovered deterministically.
 import { parseArgs } from 'node:util';
 import pg from 'pg';
-import { addSelf, containAccount, enrollAccount, recoverEnrollment, rotateCredential } from './commands.ts';
+import { addSelf, containAccount, enrollAccount, outboxDepth, recoverEnrollment, rotateCredential } from './commands.ts';
+import type { OutboxDepthResult } from './commands.ts';
 
 function fail(msg: string): never {
   process.stderr.write(msg + '\n');
@@ -197,6 +199,38 @@ async function cmdContain(argv: string[]): Promise<void> {
   }
 }
 
+// P13-E — T4 operational visibility. Aggregate outbox condition only.
+//
+// It takes NO arguments, deliberately: with no option surface there is no
+// parameter through which a query, function, or table name could be selected,
+// so the worker credential's other capability (proj.process_outbox, which
+// mutates) is unreachable from this command.
+//
+// Exit contract: 0 when the observation succeeded, whatever the numbers are;
+// non-zero when the observation itself failed. A backlog is not a failure, and
+// a failure is never rendered as an empty backlog. No threshold, no health
+// label — this command reports condition, it does not judge it.
+async function cmdOutboxDepth(argv: string[]): Promise<void> {
+  if (argv.length > 0) fail('usage: outbox-depth');
+  const db = pool('WORKER_DATABASE_URL');
+  let r: OutboxDepthResult;
+  try {
+    r = await outboxDepth(db);
+  } finally {
+    // Ended before any exit path, so the connection closes deterministically
+    // whether the observation succeeded or failed.
+    await db.end();
+  }
+  if (r.status !== 'observed') {
+    fail(`outbox-depth observation failed (${r.type}${r.sqlstate ? ' ' + r.sqlstate : ''}).`);
+  }
+  out(JSON.stringify({
+    unclaimed: r.unclaimed,
+    dead: r.dead,
+    oldestUnclaimedAgeSeconds: r.oldestUnclaimedAgeSeconds,
+  }));
+}
+
 const [sub, ...rest] = process.argv.slice(2);
 const dispatch: Record<string, (argv: string[]) => Promise<void>> = {
   enroll: cmdEnroll,
@@ -204,7 +238,8 @@ const dispatch: Record<string, (argv: string[]) => Promise<void>> = {
   rotate: cmdRotate,
   recover: cmdRecover,
   contain: cmdContain,
+  'outbox-depth': cmdOutboxDepth,
 };
 const handler = sub ? dispatch[sub] : undefined;
-if (!handler) fail('usage: operator <enroll|add-self|rotate|recover|contain> [options]');
+if (!handler) fail('usage: operator <enroll|add-self|rotate|recover|contain|outbox-depth> [options]');
 await handler(rest);
